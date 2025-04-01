@@ -5,11 +5,11 @@ use async_trait::async_trait;
 use aws_config::SdkConfig;
 use chrono::SecondsFormat;
 use serde::Serialize;
+use std::io::Write;
+use std::time::SystemTime;
+use std::{fmt, io::Cursor};
 use thiserror::Error;
 use zip::result::ZipError;
-use std::{fmt, io::Cursor};
-use std::time::SystemTime;
-use std::io::Write;
 use zip::{write::SimpleFileOptions, ZipWriter};
 
 use crate::metadata::{AgentMetadata, ReportMetadata};
@@ -25,7 +25,7 @@ pub enum S3ReporterError {
     #[error("failed to send profile data directly to S3: {0}")]
     SendProfileS3Data(aws_sdk_s3::Error),
     #[error("tokio task: {0}")]
-    JoinError(#[from] tokio::task::JoinError)
+    JoinError(#[from] tokio::task::JoinError),
 }
 
 #[derive(Debug, Serialize)]
@@ -72,14 +72,15 @@ impl S3Reporter {
         // Create a zip file.
         let zip = tokio::task::spawn_blocking(move || {
             add_files_to_zip("async_profiler_dump_0.jfr", &jfr, metadata_json)
-        }).await??;
+        })
+        .await??;
 
         // Send zip file to the S3 pre-signed URL.
         send_profile_data(
             &self.s3_client,
             self.bucket_name.clone(),
             make_s3_file_name(&metadata_obj.instance, &self.profiling_group_name),
-            zip
+            zip,
         )
         .await?;
 
@@ -119,8 +120,14 @@ fn make_s3_file_name(metadata_obj: &AgentMetadata, profiling_group_name: &str) -
 
 #[async_trait]
 impl Reporter for S3Reporter {
-    async fn report(&self, jfr: Vec<u8>, metadata: &ReportMetadata) -> Result<(), Box<dyn std::error::Error + Send>> {
-        self.report_profiling_data(jfr, &metadata).await.map_err(|e| Box::new(e) as _)
+    async fn report(
+        &self,
+        jfr: Vec<u8>,
+        metadata: &ReportMetadata,
+    ) -> Result<(), Box<dyn std::error::Error + Send>> {
+        self.report_profiling_data(jfr, &metadata)
+            .await
+            .map_err(|e| Box::new(e) as _)
     }
 }
 
@@ -140,8 +147,9 @@ fn add_files_to_zip(
     let file = Cursor::new(vec![]);
     let mut zip = ZipWriter::new(file);
     let metadata = serde_json::ser::to_string(&metadata_json).unwrap();
-    add_bytes_to_zip(&mut zip, jfr_filename,jfr_file).map_err(S3ReporterError::ZipIoError)?;
-    add_bytes_to_zip(&mut zip, "metadata.json", metadata.as_bytes()).map_err(S3ReporterError::ZipIoError)?;
+    add_bytes_to_zip(&mut zip, jfr_filename, jfr_file).map_err(S3ReporterError::ZipIoError)?;
+    add_bytes_to_zip(&mut zip, "metadata.json", metadata.as_bytes())
+        .map_err(S3ReporterError::ZipIoError)?;
     Ok(zip.finish()?.into_inner())
 }
 
@@ -161,7 +169,7 @@ async fn send_profile_data(
     s3_client: &aws_sdk_s3::Client,
     bucket_name: String,
     object_name: String,
-    zip: Vec<u8>
+    zip: Vec<u8>,
 ) -> Result<(), S3ReporterError> {
     tracing::debug!(message="uploading to s3", bucket_name=?bucket_name, object_name=?object_name);
     // Make http call to upload JFR to S3.

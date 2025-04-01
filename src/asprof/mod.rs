@@ -1,17 +1,18 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ffi::{c_char, CStr, CString}, path::Path, sync::Arc};
+use std::{
+    ffi::{c_char, CStr, CString},
+    path::Path,
+    sync::Arc,
+};
 
 use thiserror::Error;
 
 pub(crate) mod raw;
 
-
 #[derive(Debug, Default)]
-pub struct AsProfBuilder {
-
-}
+pub struct AsProfBuilder {}
 
 #[derive(Error, Debug)]
 #[error("async-profiler Library Error: {0}")]
@@ -31,8 +32,7 @@ impl AsProfBuilder {
     }
 }
 
-pub struct AsProf {
-}
+pub struct AsProf {}
 
 impl AsProf {
     pub fn builder() -> AsProfBuilder {
@@ -46,10 +46,7 @@ impl AsProf {
         Ok(())
     }
 
-    pub fn start_async_profiler(
-        &self,
-        jfr_file_path: &Path,
-    ) -> Result<(), AsProfError> {
+    pub fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), AsProfError> {
         tracing::debug!("starting the async-profiler and giving JFR file path: {jfr_file_path:?}");
 
         let args = format!(
@@ -68,9 +65,7 @@ impl AsProf {
         Ok(())
     }
 
-    fn asprof_execute(
-        args: &str,
-    ) -> Result<(), AsProfError> {
+    fn asprof_execute(args: &str) -> Result<(), AsProfError> {
         unsafe extern "C" fn callback(buf: *const c_char, size: usize) {
             unsafe {
                 if !buf.is_null() {

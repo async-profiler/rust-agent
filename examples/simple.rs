@@ -40,7 +40,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let reporting_interval = Duration::from_secs(30);
 
     let profiler = ProfilerBuilder::default()
-        .with_reporter(S3Reporter::new(&sdk_config, args.bucket, args.profiling_group))
+        .with_reporter(S3Reporter::new(
+            &sdk_config,
+            args.bucket,
+            args.profiling_group,
+        ))
         .with_reporting_interval(reporting_interval)
         .build();
 
