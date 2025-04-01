@@ -3,7 +3,6 @@
 
 use std::{
     ffi::{c_char, CStr, CString},
-    path::Path,
     sync::Arc,
 };
 
@@ -38,15 +37,20 @@ impl AsProf {
     pub fn builder() -> AsProfBuilder {
         AsProfBuilder::default()
     }
+}
 
-    pub fn init_async_profiler() -> Result<(), AsProfError> {
+impl super::profiler::ProfilerEngine for AsProf {
+    fn init_async_profiler() -> Result<(), self::AsProfError> {
         unsafe {
             (raw::async_profiler()?.asprof_init)();
         };
         Ok(())
     }
 
-    pub fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), AsProfError> {
+    fn start_async_profiler(
+        &self,
+        jfr_file_path: &std::path::PathBuf,
+    ) -> Result<(), self::AsProfError> {
         tracing::debug!("starting the async-profiler and giving JFR file path: {jfr_file_path:?}");
 
         let args = format!(
@@ -59,12 +63,14 @@ impl AsProf {
         Ok(())
     }
 
-    pub fn stop_async_profiler() -> Result<(), AsProfError> {
+    fn stop_async_profiler() -> Result<(), self::AsProfError> {
         Self::asprof_execute("stop")?;
         tracing::debug!("async-profiler stopped successfully");
         Ok(())
     }
+}
 
+impl AsProf {
     fn asprof_execute(args: &str) -> Result<(), AsProfError> {
         unsafe extern "C" fn callback(buf: *const c_char, size: usize) {
             unsafe {
