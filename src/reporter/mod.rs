@@ -7,11 +7,15 @@ use async_trait::async_trait;
 
 use crate::metadata::ReportMetadata;
 
-#[cfg(feature="s3")]
+#[cfg(feature = "s3")]
 pub mod s3;
 
 /// Abstraction around reporting profiler data.
 #[async_trait]
 pub trait Reporter: fmt::Debug {
-    async fn report(&self, jfr: Vec<u8>, metadata: &ReportMetadata) -> Result<(), Box<dyn std::error::Error + Send>>;
+    async fn report(
+        &self,
+        jfr: Vec<u8>,
+        metadata: &ReportMetadata,
+    ) -> Result<(), Box<dyn std::error::Error + Send>>;
 }

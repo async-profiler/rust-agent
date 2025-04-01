@@ -1,11 +1,20 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fs::File, io, path::Path, time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH}};
+use std::{
+    fs::File,
+    io,
+    path::Path,
+    time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH},
+};
 
 use thiserror::Error;
 
-use crate::{asprof::{self, AsProf, AsProfError}, metadata::{aws::AwsProfilerMetadataError, AgentMetadata, ReportMetadata}, reporter::Reporter};
+use crate::{
+    asprof::{self, AsProf, AsProfError},
+    metadata::{aws::AwsProfilerMetadataError, AgentMetadata, ReportMetadata},
+    reporter::Reporter,
+};
 
 struct JfrFile {
     active: tempfile::NamedTempFile,
@@ -125,7 +134,6 @@ impl Drop for ProfilerState {
     }
 }
 
-
 #[derive(Debug, Error)]
 #[non_exhaustive]
 enum TickError {
@@ -229,12 +237,13 @@ async fn profiler_tick(
         return Ok(());
     };
     let start = start.duration_since(UNIX_EPOCH)?;
-    let end = SystemTime::now()
-        .duration_since(UNIX_EPOCH)?;
+    let end = SystemTime::now().duration_since(UNIX_EPOCH)?;
 
     // Start it up immediately, writing to the "other" file, so that we keep
     // profiling the application while we're reporting data.
-    jfr_file.empty_inactive_file().map_err(TickError::EmptyInactiveFile)?;
+    jfr_file
+        .empty_inactive_file()
+        .map_err(TickError::EmptyInactiveFile)?;
     jfr_file.swap();
     state.start(jfr_file.active.path()).await?;
 
@@ -242,14 +251,14 @@ async fn profiler_tick(
     // the constructor. See the struct comments for why this is.
     // This code runs at most once.
     if agent_metadata.is_none() {
-        #[cfg(feature="aws-metadata")]
+        #[cfg(feature = "aws-metadata")]
         let md = crate::metadata::aws::load_agent_metadata().await?;
-        #[cfg(not(feature="aws-metadata"))]
+        #[cfg(not(feature = "aws-metadata"))]
         let md = crate::metadata::AgentMetadata::Other;
         tracing::debug!("loaded metadata");
         agent_metadata.replace(md);
     }
-    
+
     let report_metadata = ReportMetadata {
         instance: agent_metadata.as_ref().unwrap(),
         start,
@@ -257,9 +266,14 @@ async fn profiler_tick(
         reporting_interval,
     };
 
-    let jfr = tokio::fs::read(jfr_file.inactive.path()).await.map_err(TickError::JfrRead)?;
+    let jfr = tokio::fs::read(jfr_file.inactive.path())
+        .await
+        .map_err(TickError::JfrRead)?;
 
-    reporter.report(jfr, &report_metadata).await.map_err(TickError::Reporter)?;
+    reporter
+        .report(jfr, &report_metadata)
+        .await
+        .map_err(TickError::Reporter)?;
 
     Ok(())
 }

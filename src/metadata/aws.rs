@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use reqwest::Method;
-use thiserror::Error;
 use serde::Deserialize;
+use thiserror::Error;
 
 use super::AgentMetadata;
 
@@ -101,7 +101,6 @@ async fn read_fargate_metadata(
     Ok(serde_json::from_str(&body_str)?)
 }
 
-
 impl super::AgentMetadata {
     fn from_imds_ec2_instance_metadata(
         imds_ec2_instance_metadata: ImdsEc2InstanceMetadata,
@@ -167,7 +166,6 @@ mod tests {
     // IMAGE_ID = ad9d89a36c31afef34c79e05263b06087ad354796cfd90c66ced30f40ea2dbf4
     // TASK_UUID = f4094744-1b40-4701-9f26-ad84ebb709d7
     // CLOCK_ERROR = 0.3148955
-
 
     #[test]
     fn test_imds_ec2_metadata() {
