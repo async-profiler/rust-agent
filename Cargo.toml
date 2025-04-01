@@ -1,0 +1,38 @@
+[package]
+name = "async-profiler-agent"
+version = "0.1.0"
+description = "Rust agent for async-profiler"
+license = "Apache-2.0"
+repository = "https://github.com/async-profiler/rust-agent"
+readme = "README.md"
+edition = "2021"
+
+[dependencies]
+async-trait = "0.1"
+aws-arn = { version = "0.3", optional = true }
+aws-config = { version = "1", optional = true }
+aws-sdk-s3 = { version = "1", optional = true }
+chrono = "0.4"
+libloading = "0.8"
+reqwest = { version = "0.12", default-features = false, optional = true, features = ["charset", "http2", "rustls-tls"] }
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+tempfile = "3"
+thiserror = "2"
+tokio = { version = "1", optional = true }
+tracing = "0.1"
+zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio = { version = "1", features = ["full"] }
+
+[[example]]
+name = 'simple'
+
+[features]
+default = ["s3", "aws-metadata"]
+s3 = ["dep:aws-config", "dep:aws-sdk-s3", "dep:tokio"]
+aws-metadata = ["dep:reqwest", "dep:aws-config", "dep:aws-arn"]
