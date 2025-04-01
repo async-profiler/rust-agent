@@ -3,6 +3,7 @@
 
 use std::{
     ffi::{c_char, CStr, CString},
+    path::Path,
     sync::Arc,
 };
 
@@ -18,7 +19,7 @@ pub struct AsProfBuilder {}
 #[non_exhaustive]
 pub enum AsProfError {
     #[error("async-profiler error: {0}")]
-    AsProfError(String),
+    AsyncProfilerError(String),
     #[error("async-profiler i/o error: {0}")]
     Io(#[from] std::io::Error),
     #[error("error loading libasyncProfiler: {0}")]
@@ -47,10 +48,7 @@ impl super::profiler::ProfilerEngine for AsProf {
         Ok(())
     }
 
-    fn start_async_profiler(
-        &self,
-        jfr_file_path: &std::path::PathBuf,
-    ) -> Result<(), self::AsProfError> {
+    fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), self::AsProfError> {
         tracing::debug!("starting the async-profiler and giving JFR file path: {jfr_file_path:?}");
 
         let args = format!(
@@ -94,7 +92,7 @@ impl AsProf {
             let response = unsafe { CStr::from_ptr(response) };
             let response_str = response.to_string_lossy();
             tracing::error!("received error from async-profiler: {}", response_str);
-            Err(AsProfError::AsProfError(response_str.to_string()))
+            Err(AsProfError::AsyncProfilerError(response_str.to_string()))
             // TODO: stop the background thread in case there is an error
         } else {
             Ok(())

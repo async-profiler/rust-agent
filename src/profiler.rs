@@ -9,7 +9,7 @@ use crate::{
 use std::{
     fs::File,
     io,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 use thiserror::Error;
@@ -63,7 +63,7 @@ impl JfrFile {
     fn empty_inactive_file(&mut self) -> Result<(), io::Error> {
         // Empty the file, or create it for the first time if the profiler hasn't
         // started yet.
-        File::create(&Self::file_path(&self.inactive))?;
+        File::create(Self::file_path(&self.inactive))?;
         tracing::debug!(message = "emptied the file");
         Ok(())
     }
@@ -185,7 +185,7 @@ impl<E: ProfilerEngine> Drop for ProfilerState<E> {
 
 pub(crate) trait ProfilerEngine: Send + Sync + 'static {
     fn init_async_profiler() -> Result<(), asprof::AsProfError>;
-    fn start_async_profiler(&self, jfr_file_path: &PathBuf) -> Result<(), asprof::AsProfError>;
+    fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), asprof::AsProfError>;
     fn stop_async_profiler() -> Result<(), asprof::AsProfError>;
 }
 
@@ -261,7 +261,7 @@ impl Profiler {
                 if let Err(err) = profiler_tick(
                     &mut state,
                     &mut agent_metadata,
-                    &self.reporter,
+                    &*self.reporter,
                     self.reporting_interval,
                 )
                 .await
@@ -287,7 +287,7 @@ impl Profiler {
 async fn profiler_tick<E: ProfilerEngine>(
     state: &mut ProfilerState<E>,
     agent_metadata: &mut Option<AgentMetadata>,
-    reporter: &Box<dyn Reporter + Send + Sync>,
+    reporter: &(dyn Reporter + Send + Sync),
     reporting_interval: Duration,
 ) -> Result<(), TickError> {
     if !state.is_started() {
@@ -370,7 +370,7 @@ mod tests {
             Ok(())
         }
 
-        fn start_async_profiler(&self, jfr_file_path: &PathBuf) -> Result<(), asprof::AsProfError> {
+        fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), asprof::AsProfError> {
             let contents = format!(
                 "JFR{}",
                 self.counter.fetch_add(1, atomic::Ordering::Relaxed)
@@ -454,8 +454,8 @@ mod tests {
             Ok(())
         }
 
-        fn start_async_profiler(&self, jfr_file_path: &PathBuf) -> Result<(), asprof::AsProfError> {
-            let jfr_file_path = jfr_file_path.clone();
+        fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), asprof::AsProfError> {
+            let jfr_file_path = jfr_file_path.to_owned();
             std::fs::write(&jfr_file_path, "JFR").unwrap();
             let counter = self.counter.clone();
             tokio::task::spawn(async move {
@@ -464,14 +464,14 @@ mod tests {
                 counter.store(true, atomic::Ordering::Release);
             });
             if self.start_error {
-                Err(asprof::AsProfError::AsProfError("error".into()))
+                Err(asprof::AsProfError::AsyncProfilerError("error".into()))
             } else {
                 Ok(())
             }
         }
 
         fn stop_async_profiler() -> Result<(), asprof::AsProfError> {
-            Err(asprof::AsProfError::AsProfError("error".into()))
+            Err(asprof::AsProfError::AsyncProfilerError("error".into()))
         }
     }
 
