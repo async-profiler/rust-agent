@@ -23,7 +23,7 @@ pub enum S3ReporterError {
     #[error("creating zip file: {0}")]
     ZipError(#[from] ZipError),
     #[error("failed to send profile data directly to S3: {0}")]
-    SendProfileS3Data(aws_sdk_s3::Error),
+    SendProfileS3Data(Box<aws_sdk_s3::Error>),
     #[error("tokio task: {0}")]
     JoinError(#[from] tokio::task::JoinError),
 }
@@ -79,7 +79,7 @@ impl S3Reporter {
         send_profile_data(
             &self.s3_client,
             self.bucket_name.clone(),
-            make_s3_file_name(&metadata_obj.instance, &self.profiling_group_name),
+            make_s3_file_name(metadata_obj.instance, &self.profiling_group_name),
             zip,
         )
         .await?;
@@ -108,7 +108,7 @@ fn make_s3_file_name(metadata_obj: &AgentMetadata, profiling_group_name: &str) -
             let cluster_arn = ecs_cluster_arn.replace("/", "-").replace("_", "-");
             format!("ecs_{cluster_arn}_{task_arn}")
         }
-        AgentMetadata::Other => format!("onprem"),
+        AgentMetadata::Other => "onprem".to_string(),
     };
     let time: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
     let time = time
@@ -125,7 +125,7 @@ impl Reporter for S3Reporter {
         jfr: Vec<u8>,
         metadata: &ReportMetadata,
     ) -> Result<(), Box<dyn std::error::Error + Send>> {
-        self.report_profiling_data(jfr, &metadata)
+        self.report_profiling_data(jfr, metadata)
             .await
             .map_err(|e| Box::new(e) as _)
     }
@@ -181,6 +181,6 @@ async fn send_profile_data(
         .content_type("application/zip")
         .send()
         .await
-        .map_err(|x| S3ReporterError::SendProfileS3Data(x.into()))?;
+        .map_err(|x| S3ReporterError::SendProfileS3Data(Box::new(x.into())))?;
     Ok(())
 }

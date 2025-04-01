@@ -27,7 +27,8 @@ zip = { version = "2", default-features = false, features = ["deflate"] }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["test-util", "full"] }
+test-case = "3"
 
 [[example]]
 name = 'simple'

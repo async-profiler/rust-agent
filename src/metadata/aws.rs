@@ -73,9 +73,9 @@ async fn read_fargate_metadata(
     http_client: &reqwest::Client,
 ) -> Result<FargateMetadata, AwsProfilerMetadataError> {
     let Ok(md_uri) = std::env::var("ECS_CONTAINER_METADATA_URI_V4") else {
-        return Err(AwsProfilerMetadataError::InvalidUri(format!(
-            "not running on fargate"
-        )));
+        return Err(AwsProfilerMetadataError::InvalidUri(
+            "not running on fargate".into(),
+        ));
     };
     let uri = format!(
         "{}/task",
@@ -92,11 +92,11 @@ async fn read_fargate_metadata(
     let res = http_client
         .execute(req)
         .await
-        .map_err(|e| AwsProfilerMetadataError::FailedToFetchMetadataFromEndpoint(e))?;
+        .map_err(AwsProfilerMetadataError::FailedToFetchMetadataFromEndpoint)?;
     let body_str = res
         .text()
         .await
-        .map_err(|e| AwsProfilerMetadataError::FailedToParseMetadataFromEndpoint(e))?;
+        .map_err(AwsProfilerMetadataError::FailedToParseMetadataFromEndpoint)?;
 
     Ok(serde_json::from_str(&body_str)?)
 }
