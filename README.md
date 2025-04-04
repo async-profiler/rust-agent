@@ -8,6 +8,10 @@ An in-process Rust agent for profiling an application using [async-profiler] and
 
 The agent runs the profiler and uploads the output periodically via a reporter.
 
+When starting, the profiler [dlopen(3)]'s `libasyncProfiler.so` and returns an `Err` if it is not found, so make sure there is a `libasyncProfiler.so` in the search path (notably, the search path includes RPATH and LD_LIBRARY_PATH, but *not* the current directory for obvious security reasons).
+
+[dlopen(3)]: https://linux.die.net/man/3/dlopen
+
 You can write your own reporter (via the `Reporter` trait) to upload the profile results to your favorite profiler backend.
 
 You can use the S3 reporter, which uploads the reports to an S3 bucket, as follows:
@@ -34,6 +38,14 @@ The `zip` file is uploaded to the bucket under the path `profile_{profiling_grou
 where `{machine}` is either `ec2_{ec2_instance_id}_`, `ecs_{cluster_arn}_{task_arn}`, or `onprem__`.
 
 [JFR]: https://docs.oracle.com/javacomponents/jmc-5-4/jfr-runtime-guide/about.htm
+
+#### Sample program
+
+You can test the agent by using the sample program, for example:
+
+```
+LD_LIBRARY_PATH=/path/to/libasyncProfiler.so cargo run --release --example simple -- --profiling-group PG --bucket-owner YOUR-AWS-ACCOUNT-ID --bucket YOUR_BUCKET_ID
+```
 
 ### Host Metadata Auto-Detection
 
