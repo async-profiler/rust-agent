@@ -70,9 +70,7 @@ impl JfrFile {
 }
 
 /// Builds a [`Profiler`], panicking if any required fields were not set by the
-/// time `build` is called. Most users should be using [`Profiler::new`] which
-/// requires all known parameters up front; this type exists for those needing
-/// fine-grained customization.
+/// time `build` is called.
 #[derive(Debug, Default)]
 pub struct ProfilerBuilder {
     reporting_interval: Option<Duration>,

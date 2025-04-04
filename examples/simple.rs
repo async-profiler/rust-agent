@@ -26,6 +26,8 @@ struct Args {
     #[arg(long)]
     profiling_group: String,
     #[arg(long)]
+    bucket_owner: String,
+    #[arg(long)]
     bucket: String,
 }
 
@@ -42,6 +44,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let profiler = ProfilerBuilder::default()
         .with_reporter(S3Reporter::new(
             &sdk_config,
+            args.bucket_owner,
             args.bucket,
             args.profiling_group,
         ))
