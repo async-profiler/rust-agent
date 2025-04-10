@@ -1,7 +1,10 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_profiler_agent::{profiler::ProfilerBuilder, reporter::s3::{S3Reporter, S3ReporterConfig}};
+use async_profiler_agent::{
+    profiler::ProfilerBuilder,
+    reporter::s3::{S3Reporter, S3ReporterConfig},
+};
 use std::time::Duration;
 
 use aws_config::BehaviorVersion;
