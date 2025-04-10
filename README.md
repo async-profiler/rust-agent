@@ -4,12 +4,19 @@ An in-process Rust agent for profiling an application using [async-profiler] and
 
 [async-profiler]: https://github.com/async-profiler/async-profiler
 
+### OS/CPU Support
+
+The async-profiler Rust agent currently only supports Linux, on either x86-64 or aarch64.
+
+The async-profiler library supports Mac as well. This agent currently does not support Mac due to a lack of interest.
+
 ### Usage
 
 The agent runs the profiler and uploads the output periodically via a reporter.
 
-When starting, the profiler [dlopen(3)]'s `libasyncProfiler.so` and returns an `Err` if it is not found, so make sure there is a `libasyncProfiler.so` in the search path (notably, the search path includes RPATH and LD_LIBRARY_PATH, but *not* the current directory for obvious security reasons).
+When starting, the profiler [dlopen(3)]'s `libasyncProfiler.so` and returns an `Err` if it is not found, so make sure there is a `libasyncProfiler.so` in the search path[^1].
 
+[^1]: the dlopen search path includes RPATH and LD_LIBRARY_PATH, but *not* the current directory to avoid current directory attacks.
 [dlopen(3)]: https://linux.die.net/man/3/dlopen
 
 You can write your own reporter (via the `Reporter` trait) to upload the profile results to your favorite profiler backend.
@@ -24,7 +31,12 @@ let profiling_group = "a-name-to-give-the-uploaded-data";
 let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;
 
 let profiler = ProfilerBuilder::default()
-    .with_reporter(S3Reporter::new(&sdk_config, bucket_owner, bucket, profiling_group))
+    .with_reporter(S3Reporter::new(S3ReporterConfig {
+        sdk_config: &sdk_config,
+        bucket_owner: bucket_owner.into(),
+        bucket_name: bucket_name.into(),
+        profiling_group: profiling_group.into(),
+    }))
     .build();
 
 profiler.spawn()?;

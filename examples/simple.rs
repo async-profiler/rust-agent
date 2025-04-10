@@ -1,7 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_profiler_agent::{profiler::ProfilerBuilder, reporter::s3::S3Reporter};
+use async_profiler_agent::{profiler::ProfilerBuilder, reporter::s3::{S3Reporter, S3ReporterConfig}};
 use std::time::Duration;
 
 use aws_config::BehaviorVersion;
@@ -42,12 +42,12 @@ async fn main() -> Result<(), anyhow::Error> {
     let reporting_interval = Duration::from_secs(30);
 
     let profiler = ProfilerBuilder::default()
-        .with_reporter(S3Reporter::new(
-            &sdk_config,
-            args.bucket_owner,
-            args.bucket,
-            args.profiling_group,
-        ))
+        .with_reporter(S3Reporter::new(S3ReporterConfig {
+            sdk_config: &sdk_config,
+            bucket_owner: args.bucket_owner,
+            bucket_name: args.bucket,
+            profiling_group_name: args.profiling_group,
+        }))
         .with_reporting_interval(reporting_interval)
         .build();
 

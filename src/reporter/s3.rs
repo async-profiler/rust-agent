@@ -35,6 +35,18 @@ pub struct MetadataJson {
     reporting_interval: u64,
 }
 
+/// Mandatory parameters in order to configure an S3 reporter
+pub struct S3ReporterConfig<'a> {
+    /// The SDK config to get credentials from
+    pub sdk_config: &'a SdkConfig,
+    /// The expected bucket owner account
+    pub bucket_owner: String,
+    /// The bucket name
+    pub bucket_name: String,
+    /// The profiling group name, used in the file names within the bucket
+    pub profiling_group_name: String,
+}
+
 /// A reporter for S3.
 pub struct S3Reporter {
     s3_client: aws_sdk_s3::Client,
@@ -45,7 +57,13 @@ pub struct S3Reporter {
 
 impl S3Reporter {
     /// Makes a new one.
-    pub fn new(sdk_config: &SdkConfig, bucket_owner: String, bucket_name: String, profiling_group_name: String) -> Self {
+    pub fn new(config: S3ReporterConfig<'_>) -> Self {
+        let S3ReporterConfig {
+            sdk_config,
+            bucket_owner,
+            bucket_name,
+            profiling_group_name,
+        } = config;
         let s3_client_config = aws_sdk_s3::config::Builder::from(sdk_config).build();
         let s3_client = aws_sdk_s3::Client::from_conf(s3_client_config);
 
