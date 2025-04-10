@@ -43,6 +43,23 @@ GitHub provides additional document on [forking a repository](https://help.githu
 ## Finding contributions to work on
 Looking at the existing issues is a great way to find something to contribute on. As our projects, by default, use the default GitHub issue labels (enhancement/bug/duplicate/help wanted/invalid/question/wontfix), looking at any 'help wanted' issues is a great place to start.
 
+## Doing releases
+
+There is a `.github/workflows/release.yml` workflow that will attempt to use a crates.io release every time the version in the Cargo.toml changes (AFAICT it attempts to see whether there's a tag with the same name as the version, and if no such tag exists, it will do a release). That is the sanctioned way of doing releases.
+
+To update the `Cargo.toml` and changelog, use [conventional commits], and in a clean git repo, run the following commands:
+```
+cargo install release-plz
+git checkout main && release-plz update && git commit -a
+```
+
+Then make a new PR for the release and get it approved.
+
+The automated release PR generation functionality is not used here.
+
+This requires a crates.io token in GitHub secrets for the repo. Currently the "token" is literally the string `secret` but I will put a more realistic token once the repo is public. 
+
+[conventional commits]: https://www.conventionalcommits.org/en/v1.0.0/
 
 ## Code of Conduct
 This project has adopted the [Amazon Open Source Code of Conduct](https://aws.github.io/code-of-conduct).
