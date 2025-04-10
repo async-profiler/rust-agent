@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.0](https://github.com/async-profiler/rust-agent/releases/tag/v0.1.0) - 2025-04-10
+
+### Fixed
+
+- fix CI
+- fix NOTICE
+
+### Other
+
+- add release-plz
+- add git-cliff
+- add code for removing Cargo.lock
+- build action
+- .github
+- clippy
+- safer tempfile handling, more tests
+- cargo fmt
+- initial version of agent
+- Initial commit
+
 ### ⚙️ Miscellaneous Tasks
 
 - Add git-cliff
