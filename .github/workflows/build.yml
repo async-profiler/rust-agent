@@ -7,7 +7,7 @@ jobs:
     strategy:
       matrix:
         toolchain:
-          - "1.71.1" # Current MSRVA
+          - "1.85" # Current MSRV due to Cargo MSRV feature
           - stable
     env:
       RUST_BACKTRACE: 1
