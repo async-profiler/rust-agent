@@ -35,21 +35,41 @@ pub struct MetadataJson {
     reporting_interval: u64,
 }
 
+/// Mandatory parameters in order to configure an S3 reporter
+pub struct S3ReporterConfig<'a> {
+    /// The SDK config to get credentials from
+    pub sdk_config: &'a SdkConfig,
+    /// The expected bucket owner account
+    pub bucket_owner: String,
+    /// The bucket name
+    pub bucket_name: String,
+    /// The profiling group name, used in the file names within the bucket
+    pub profiling_group_name: String,
+}
+
 /// A reporter for S3.
 pub struct S3Reporter {
     s3_client: aws_sdk_s3::Client,
+    bucket_owner: String,
     bucket_name: String,
     profiling_group_name: String,
 }
 
 impl S3Reporter {
     /// Makes a new one.
-    pub fn new(sdk_config: &SdkConfig, bucket_name: String, profiling_group_name: String) -> Self {
+    pub fn new(config: S3ReporterConfig<'_>) -> Self {
+        let S3ReporterConfig {
+            sdk_config,
+            bucket_owner,
+            bucket_name,
+            profiling_group_name,
+        } = config;
         let s3_client_config = aws_sdk_s3::config::Builder::from(sdk_config).build();
         let s3_client = aws_sdk_s3::Client::from_conf(s3_client_config);
 
         S3Reporter {
             s3_client,
+            bucket_owner,
             bucket_name,
             profiling_group_name,
         }
@@ -78,6 +98,7 @@ impl S3Reporter {
         // Send zip file to the S3 pre-signed URL.
         send_profile_data(
             &self.s3_client,
+            self.bucket_owner.clone(),
             self.bucket_name.clone(),
             make_s3_file_name(metadata_obj.instance, &self.profiling_group_name),
             zip,
@@ -108,7 +129,7 @@ fn make_s3_file_name(metadata_obj: &AgentMetadata, profiling_group_name: &str) -
             let cluster_arn = ecs_cluster_arn.replace("/", "-").replace("_", "-");
             format!("ecs_{cluster_arn}_{task_arn}")
         }
-        AgentMetadata::Other => "onprem".to_string(),
+        AgentMetadata::Other => "onprem__".to_string(),
     };
     let time: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
     let time = time
@@ -167,6 +188,7 @@ fn add_bytes_to_zip(
 
 async fn send_profile_data(
     s3_client: &aws_sdk_s3::Client,
+    bucket_owner: String,
     bucket_name: String,
     object_name: String,
     zip: Vec<u8>,
@@ -175,6 +197,7 @@ async fn send_profile_data(
     // Make http call to upload JFR to S3.
     s3_client
         .put_object()
+        .expected_bucket_owner(bucket_owner)
         .bucket(bucket_name)
         .key(object_name)
         .body(zip.into())
