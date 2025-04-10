@@ -11,9 +11,6 @@ jobs:
   release-plz-pr:
     name: Release-plz PR
     runs-on: ubuntu-latest
-    concurrency:
-      group: release-plz-${{ github.ref }}
-      cancel-in-progress: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,7 +19,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz
-        uses: MarcoIeni/release-plz-action@v0.5
+        uses: release-plz/action@v0.5.102
         with:
           command: release-pr
         env:
