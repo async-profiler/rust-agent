@@ -1,0 +1,3 @@
+[[package]]
+name = "async-profiler-agent"
+changelog_path = "CHANGELOG.md"
