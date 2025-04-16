@@ -3,5 +3,6 @@
 
 mod asprof;
 pub mod metadata;
+pub mod pollcatch;
 pub mod profiler;
 pub mod reporter;

@@ -1,6 +1,6 @@
 [package]
 name = "async-profiler-agent"
-version = "0.1.0"
+version = "0.1.1"
 description = "Rust agent for async-profiler"
 license = "Apache-2.0"
 repository = "https://github.com/async-profiler/rust-agent"
@@ -29,6 +29,7 @@ anyhow = "1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1", features = ["test-util", "full"] }
 test-case = "3"
+rand = "0.9"
 
 [[example]]
 name = 'simple'

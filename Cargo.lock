@@ -114,7 +114,7 @@ dependencies = [
 
 [[package]]
 name = "async-profiler-agent"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -124,6 +124,7 @@ dependencies = [
  "chrono",
  "clap",
  "libloading",
+ "rand",
  "reqwest",
  "serde",
  "serde_json",

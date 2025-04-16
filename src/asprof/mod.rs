@@ -4,6 +4,7 @@
 use std::{
     ffi::{c_char, CStr, CString},
     path::Path,
+    ptr::{self, addr_of},
     sync::Arc,
 };
 
@@ -32,11 +33,64 @@ impl AsProfBuilder {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct UserJfrKey {
+    key: i32,
+}
+
 pub struct AsProf {}
 
 impl AsProf {
     pub fn builder() -> AsProfBuilder {
         AsProfBuilder::default()
+    }
+
+    /// Return the async-profiler's sample counter
+    pub fn get_sample_counter() -> Option<u64> {
+        unsafe {
+            let prof = raw::async_profiler().ok()?;
+            let thread_local_data = prof.asprof_get_thread_local_data.as_ref()?();
+            if thread_local_data.is_null() {
+                None
+            } else {
+                Some(ptr::read_volatile(addr_of!(
+                    (*thread_local_data).sample_counter
+                )))
+            }
+        }
+    }
+
+    /// Create a user JFR key from a given key
+    pub fn create_user_jfr_key(key: &CStr) -> Result<UserJfrKey, AsProfError> {
+        unsafe {
+            let prof = raw::async_profiler()?;
+            let asprof_register_jfr_event =
+                prof.asprof_register_jfr_event.as_ref().ok_or_else(|| {
+                    AsProfError::AsyncProfilerError(
+                        "async-profiler does not support user JFR events".into(),
+                    )
+                })?;
+            let res = asprof_register_jfr_event(key.as_ptr());
+            if res < 0 {
+                Err(AsProfError::AsyncProfilerError(
+                    "unable to register JFR event".into(),
+                ))
+            } else {
+                Ok(UserJfrKey { key: res })
+            }
+        }
+    }
+
+    pub fn emit_user_jfr(key: UserJfrKey, jfr: &[u8]) -> Result<(), AsProfError> {
+        unsafe {
+            let prof = raw::async_profiler()?;
+            let asprof_emit_jfr_event = prof.asprof_emit_jfr_event.as_ref().ok_or_else(|| {
+                AsProfError::AsyncProfilerError(
+                    "async-profiler does not support user JFR events".into(),
+                )
+            })?;
+            Self::asprof_error(asprof_emit_jfr_event(key.key, jfr.as_ptr(), jfr.len()))
+        }
     }
 }
 
@@ -69,6 +123,25 @@ impl super::profiler::ProfilerEngine for AsProf {
 }
 
 impl AsProf {
+    /// convert an asprof_error_t to a Result
+    ///
+    /// SAFETY: response must be a valid asprof_error_t
+    unsafe fn asprof_error(response: raw::asprof_error_t) -> Result<(), AsProfError> {
+        if !response.is_null() {
+            let response = (raw::async_profiler()?.asprof_error_str)(response);
+            if response.is_null() {
+                return Ok(());
+            }
+            let response = unsafe { CStr::from_ptr(response) };
+            let response_str = response.to_string_lossy();
+            tracing::error!("received error from async-profiler: {}", response_str);
+            Err(AsProfError::AsyncProfilerError(response_str.to_string()))
+            // TODO: stop the background thread in case there is an error
+        } else {
+            Ok(())
+        }
+    }
+
     fn asprof_execute(args: &str) -> Result<(), AsProfError> {
         unsafe extern "C" fn callback(buf: *const c_char, size: usize) {
             unsafe {
@@ -85,17 +158,11 @@ impl AsProf {
         }
 
         let args_compatible = CString::new(args).unwrap();
-        let response = unsafe {
-            (raw::async_profiler()?.asprof_execute)(args_compatible.as_ptr(), Some(callback))
-        };
-        if !response.is_null() {
-            let response = unsafe { CStr::from_ptr(response) };
-            let response_str = response.to_string_lossy();
-            tracing::error!("received error from async-profiler: {}", response_str);
-            Err(AsProfError::AsyncProfilerError(response_str.to_string()))
-            // TODO: stop the background thread in case there is an error
-        } else {
-            Ok(())
+        unsafe {
+            Self::asprof_error((raw::async_profiler()?.asprof_execute)(
+                args_compatible.as_ptr(),
+                Some(callback),
+            ))
         }
     }
 }

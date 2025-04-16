@@ -12,6 +12,15 @@ pub type asprof_error_t = *const std::ffi::c_char;
 #[allow(non_camel_case_types)]
 pub type asprof_writer_t = Option<unsafe extern "C" fn(buf: *const std::ffi::c_char, size: usize)>;
 
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct asprof_thread_local_data {
+    pub sample_counter: u64,
+}
+
+#[allow(non_camel_case_types)]
+pub type asprof_jfr_event_key = std::ffi::c_int;
+
 pub(crate) struct AsyncProfiler {
     pub(crate) asprof_init: libloading::Symbol<'static, unsafe extern "C" fn()>,
     pub(crate) asprof_execute: libloading::Symbol<
@@ -20,6 +29,25 @@ pub(crate) struct AsyncProfiler {
             command: *const std::ffi::c_char,
             output_callback: asprof_writer_t,
         ) -> asprof_error_t,
+    >,
+    pub(crate) asprof_error_str: libloading::Symbol<
+        'static,
+        unsafe extern "C" fn(asprof_error_t) -> *const std::ffi::c_char,
+    >,
+    pub(crate) asprof_get_thread_local_data: Option<
+        libloading::Symbol<'static, unsafe extern "C" fn() -> *mut asprof_thread_local_data>,
+    >,
+    pub(crate) asprof_register_jfr_event: Option<
+        libloading::Symbol<
+            'static,
+            unsafe extern "C" fn(*const std::ffi::c_char) -> asprof_jfr_event_key,
+        >,
+    >,
+    pub(crate) asprof_emit_jfr_event: Option<
+        libloading::Symbol<
+            'static,
+            unsafe extern "C" fn(asprof_jfr_event_key, *const u8, usize) -> asprof_error_t,
+        >,
     >,
 }
 
@@ -39,6 +67,10 @@ static ASYNC_PROFILER: LazyLock<Result<AsyncProfiler, Arc<libloading::Error>>> =
             Ok(AsyncProfiler {
                 asprof_init: lib.get(b"asprof_init")?,
                 asprof_execute: lib.get(b"asprof_execute")?,
+                asprof_error_str: lib.get(b"asprof_error_str")?,
+                asprof_get_thread_local_data: lib.get(b"asprof_get_thread_local_data").ok(),
+                asprof_register_jfr_event: lib.get(b"asprof_register_jfr_event").ok(),
+                asprof_emit_jfr_event: lib.get(b"asprof_emit_jfr_event").ok(),
             })
         }
     });
