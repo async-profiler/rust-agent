@@ -71,6 +71,19 @@ The metadata is not used by the agent directly, and only provided to the reporte
 [Fargate]: https://aws.amazon.com/fargate
 [IMDS]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
 
+### PollCatch
+
+If you want to find long poll times, and you have `RUSTFLAGS="--cfg tokio_unstable"`, you can
+emit `tokio.PollCatchV1` events this way:
+
+```
+    #[cfg(tokio_unstable)]
+    {
+        rt.on_before_task_poll(|_| async_profiler_agent::pollcatch::before_poll_hook())
+            .on_after_task_poll(|_| async_profiler_agent::pollcatch::after_poll_hook());
+    }
+```
+
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.

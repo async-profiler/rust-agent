@@ -10,6 +10,8 @@ use std::time::Duration;
 use aws_config::BehaviorVersion;
 use clap::Parser;
 
+mod slow;
+
 pub fn set_up_tracing() {
     use tracing_subscriber::{prelude::*, EnvFilter};
 
@@ -34,8 +36,21 @@ struct Args {
     bucket: String,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+#[allow(unexpected_cfgs)]
+pub fn main() -> anyhow::Result<()> {
+    let mut rt: tokio::runtime::Builder = tokio::runtime::Builder::new_multi_thread();
+    rt.enable_all();
+
+    #[cfg(tokio_unstable)]
+    {
+        rt.on_before_task_poll(|_| async_profiler_agent::pollcatch::before_poll_hook())
+            .on_after_task_poll(|_| async_profiler_agent::pollcatch::after_poll_hook());
+    }
+    let rt = rt.build().unwrap();
+    rt.block_on(main_internal())
+}
+
+async fn main_internal() -> Result<(), anyhow::Error> {
     set_up_tracing();
     tracing::info!("main started");
 
@@ -58,16 +73,6 @@ async fn main() -> Result<(), anyhow::Error> {
     profiler.spawn()?;
     tracing::info!("profiler started");
 
-    let sleep_secs = 6;
-    let sleep_duration = Duration::from_secs(sleep_secs);
-    let mut random_string: String = String::with_capacity(1);
-    loop {
-        random_string.push('a');
-
-        tracing::info!("inside loop: going to sleep {sleep_secs} seconds");
-        tokio::time::sleep(sleep_duration).await;
-        tracing::info!("application woke up");
-
-        random_string.pop();
-    }
+    slow::run().await;
+    Ok(())
 }

@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [unreleased]
+
+### 🚀 Features
+
+- Add initial support for pollcatch
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix release-plz.toml
+
 ## [0.1.0] - 2025-04-16
 
 ### ⚙️ Miscellaneous Tasks
