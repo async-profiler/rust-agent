@@ -4,7 +4,7 @@ version = "0.1.1"
 description = "Rust agent for async-profiler"
 license = "Apache-2.0"
 repository = "https://github.com/async-profiler/rust-agent"
-readme = "README.md"
+readme = "../README.md"
 edition = "2021"
 
 [dependencies]

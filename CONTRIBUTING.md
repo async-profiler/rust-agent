@@ -50,14 +50,12 @@ There is a `.github/workflows/release.yml` workflow that will attempt to use a c
 To update the `Cargo.toml` and changelog, use [conventional commits], and in a clean git repo, run the following commands:
 ```
 cargo install release-plz
-git checkout main && release-plz update && git commit -a
+git checkout main && ( cd async-profiler-agent && release-plz update ) && git commit -a
 ```
 
 Then make a new PR for the release and get it approved.
 
 The automated release PR generation functionality is not used here.
-
-This requires a crates.io token in GitHub secrets for the repo. Currently the "token" is literally the string `secret` but I will put a more realistic token once the repo is public. 
 
 [conventional commits]: https://www.conventionalcommits.org/en/v1.0.0/
 

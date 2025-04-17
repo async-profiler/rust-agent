@@ -16,7 +16,9 @@ runs:
     - uses: Swatinem/rust-cache@v2
     - name: Build
       shell: bash
+      working-directory: async-profiler-agent
       run: if [ "${{ inputs.toolchain }}" != stable ]; then rm -fv Cargo.lock; fi && cargo build --all-features --verbose
     - name: Run tests
       shell: bash
+      working-directory: async-profiler-agent
       run: cargo test --all-features --verbose
