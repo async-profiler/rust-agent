@@ -84,6 +84,16 @@ emit `tokio.PollCatchV1` events this way:
     }
 ```
 
+## Decoder
+
+The `decoder` directory in the Git repository contains a decoder that can be used to view JFR files, especially with PollCatch information.
+
+The decoder is NOT intended right now to be used in production. In particular, it uses the [`jfrs`] crate for parsing `.jfr` files, and while that crate seems to be purely safe Rust, to my knowledge it has not been audited for security and probably contains at least denial-of-service issues if not worse.
+
+If you want to use the decoder for anything but debugging on trusted `.jfr` files, you bear full responsibility for the consequences.
+
+[`jfrs`]: https://docs.rs/jfrs
+
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
