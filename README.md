@@ -84,6 +84,52 @@ emit `tokio.PollCatchV1` events this way:
     }
 ```
 
+## Decoder
+
+The `decoder` directory in the Git repository contains a decoder that can be used to view JFR files, especially with PollCatch information.
+
+The decoder is NOT intended right now to be used in production. In particular, it uses the [`jfrs`] crate for parsing `.jfr` files, and while that crate seems to be purely safe Rust, to my knowledge it has not been audited for security and probably contains at least denial-of-service issues if not worse.
+
+If you want to use the decoder for anything but debugging on trusted `.jfr` files, you bear full responsibility for the consequences.
+
+To use the decoder, you can download the `.zip` file from s3, and then run it:
+```
+aws s3 cp s3://your-bucket/YOUR_PROFILE.zip .
+# the last parameter is the long poll threshold
+./decoder/target/release/pollcatch-decoder longpolls --zip profile_WHATEVER_*.zip 500us
+```
+
+The output should look like this
+```
+[930689.953296] thread 60898 - poll of 8885us
+ -   1: libpthread-2.26.so.__nanosleep
+ -   2: simple.std::thread::sleep_ms
+ -   3: simple.simple::slow::accidentally_slow
+ -   4: simple.simple::slow::accidentally_slow_2
+ -   5: simple.simple::slow::run::{{closure}}::{{closure}}
+ -  16 more frame(s) (pass --stack-depth=21 to show)
+
+[930691.953294] thread 60898 - poll of 736us
+ -   1: libpthread-2.26.so.__nanosleep
+ -   2: simple.std::thread::sleep_ms
+ -   3: simple.simple::slow::accidentally_slow
+ -   4: simple.simple::slow::accidentally_slow_2
+ -   5: simple.simple::slow::run::{{closure}}::{{closure}}
+ -  16 more frame(s) (pass --stack-depth=21 to show)
+
+[930709.953293] thread 60898 - poll of 2736us
+ -   1: libpthread-2.26.so.__nanosleep
+ -   2: simple.std::thread::sleep_ms
+ -   3: simple.simple::slow::accidentally_slow
+ -   4: simple.simple::slow::accidentally_slow_2
+ -   5: simple.simple::slow::run::{{closure}}::{{closure}}
+ -  16 more frame(s) (pass --stack-depth=21 to show)
+```
+
+If it does not work, make sure you are using the most recent version of `async-profiler` and that you enabled the pollcatch hooks.
+
+[`jfrs`]: https://docs.rs/jfrs
+
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.

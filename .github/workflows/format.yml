@@ -15,6 +15,11 @@ jobs:
         id: cargoFmt
         shell: bash
         run: cargo fmt --all -- --check
+      - name: Run fmt check - decoder
+        id: cargoFmtDecoder
+        shell: bash
+        working-directory: decoder
+        run: cargo fmt --all -- --check
   clippy:
     name: Cargo clippy
     runs-on: ubuntu-latest
@@ -25,4 +30,18 @@ jobs:
       - name: Run clippy check
         id: cargoClippy
         shell: bash
+        run: cargo clippy --workspace --all-features -- -D warnings
+  clippyDecoder:
+    name: Cargo clippy (decoder)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-directories: decoder
+      - name: Run clippy check - decoder
+        id: cargoClippyDecoder
+        shell: bash
+        working-directory: decoder
         run: cargo clippy --workspace --all-features -- -D warnings

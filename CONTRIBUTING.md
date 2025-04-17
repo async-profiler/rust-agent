@@ -57,8 +57,6 @@ Then make a new PR for the release and get it approved.
 
 The automated release PR generation functionality is not used here.
 
-This requires a crates.io token in GitHub secrets for the repo. Currently the "token" is literally the string `secret` but I will put a more realistic token once the repo is public. 
-
 [conventional commits]: https://www.conventionalcommits.org/en/v1.0.0/
 
 ## Code of Conduct
