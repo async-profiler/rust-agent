@@ -1,5 +1,10 @@
 ## async-profiler Rust agent
 
+[![crates.io](https://img.shields.io/crates/v/async-profiler-agent.svg)](https://crates.io/crates/async-profiler-agent)
+[![Released API docs](https://docs.rs/async-profiler-agent/badge.svg)](https://docs.rs/async-profiler-agent)
+[![Apache-2.0 licensed](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](./LICENSE)
+[![CI](https://github.com/async-profiler/rust-agent/actions/workflows/build.yml/badge.svg)](https://github.com/async-profiler/rust-agent/actions?query=workflow%3Abuild)
+
 An in-process Rust agent for profiling an application using [async-profiler] and uploading the resulting profiles.
 
 [async-profiler]: https://github.com/async-profiler/async-profiler
