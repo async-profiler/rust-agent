@@ -6,8 +6,10 @@ use super::Reporter;
 
 use std::fmt;
 
+/// An aggregated error that contains an error per reporter. A reporter is identified
+/// by the result of its Debug impl.
 #[derive(Debug, thiserror::Error)]
-pub struct MultiError {
+struct MultiError {
     errors: Vec<(String, Box<dyn std::error::Error + Send>)>,
 }
 
