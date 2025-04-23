@@ -4,6 +4,28 @@ use crate::metadata::ReportMetadata;
 
 use super::Reporter;
 
+use std::fmt;
+
+#[derive(Debug, thiserror::Error)]
+pub struct MultiError {
+    errors: Vec<(String, Box<dyn std::error::Error + Send>)>,
+}
+
+impl fmt::Display for MultiError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{")?;
+        let mut first = true;
+        for (reporter, err) in self.errors.iter() {
+            if !first {
+                write!(f, ", ")?;
+            }
+            first = false;
+            write!(f, "{}: {}", reporter, err)?;
+        }
+        write!(f, "}}")
+    }
+}
+
 #[derive(Debug)]
 /// A reporter that reports profiling results to several destinations.
 ///
@@ -26,14 +48,21 @@ impl Reporter for MultiReporter {
         jfr: Vec<u8>,
         metadata: &ReportMetadata,
     ) -> Result<(), Box<dyn std::error::Error + Send>> {
-        let errs = futures::future::join_all(
-            self.reporters
-                .iter()
-                .map(|reporter| reporter.report(jfr.clone(), metadata)),
-        )
+        let jfr_ref = &jfr[..];
+        let errors = futures::future::join_all(self.reporters.iter().map(|reporter| async move {
+            reporter
+                .report(jfr_ref.to_owned(), metadata)
+                .await
+                .map_err(move |e| (format!("{:?}", reporter), e))
+        }))
         .await;
-        // return the first error
-        errs.into_iter().collect()
+        // return all errors
+        let errors: Vec<_> = errors.into_iter().flat_map(|e| e.err()).collect();
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(Box::new(MultiError { errors }))
+        }
     }
 }
 
@@ -73,12 +102,12 @@ pub mod test {
 
     #[derive(Debug, thiserror::Error)]
     enum Error {
-        #[error("failed")]
-        Failed,
+        #[error("failed: {0}")]
+        Failed(String),
     }
 
     #[derive(Debug)]
-    struct ErrReporter;
+    struct ErrReporter(String);
     #[async_trait]
     impl Reporter for ErrReporter {
         async fn report(
@@ -86,7 +115,7 @@ pub mod test {
             _jfr: Vec<u8>,
             _metadata: &ReportMetadata,
         ) -> Result<(), Box<dyn std::error::Error + Send>> {
-            Err(Box::new(Error::Failed))
+            Err(Box::new(Error::Failed(self.0.clone())))
         }
     }
 
@@ -119,11 +148,19 @@ pub mod test {
         let signal_after = Arc::new(AtomicBool::new(false));
         let reporter = MultiReporter::new(vec![
             Box::new(OkReporter(signal_before.clone())) as Box<dyn Reporter + Send + Sync>,
-            Box::new(ErrReporter) as Box<dyn Reporter + Send + Sync>,
+            Box::new(ErrReporter("foo".to_owned())) as Box<dyn Reporter + Send + Sync>,
+            Box::new(ErrReporter("bar".to_owned())) as Box<dyn Reporter + Send + Sync>,
             Box::new(OkReporter(signal_after.clone())) as Box<dyn Reporter + Send + Sync>,
         ]);
         // test that reports are done and return an error
-        reporter.report(vec![], &DUMMY_METADATA).await.unwrap_err();
+        let err = format!(
+            "{}",
+            reporter.report(vec![], &DUMMY_METADATA).await.unwrap_err()
+        );
+        assert_eq!(
+            err,
+            "{ErrReporter(\"foo\"): failed: foo, ErrReporter(\"bar\"): failed: bar}"
+        );
         // test that reports are done even though a reporter errored
         assert!(signal_before.load(atomic::Ordering::Relaxed));
         assert!(signal_after.load(atomic::Ordering::Relaxed));
