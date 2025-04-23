@@ -7,6 +7,7 @@ use async_trait::async_trait;
 
 use crate::metadata::ReportMetadata;
 
+pub mod multi;
 #[cfg(feature = "s3")]
 pub mod s3;
 

@@ -30,3 +30,12 @@ pub struct ReportMetadata<'a> {
 
 #[cfg(feature = "aws-metadata")]
 pub mod aws;
+
+/// [private] dummy metadata to make testing easier
+#[cfg(test)]
+pub(crate) const DUMMY_METADATA: ReportMetadata<'static> = ReportMetadata {
+    instance: &AgentMetadata::Other,
+    start: Duration::from_secs(1),
+    end: Duration::from_secs(2),
+    reporting_interval: Duration::from_secs(1),
+};
