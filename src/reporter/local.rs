@@ -26,7 +26,7 @@ pub struct LocalReporter {
 }
 
 impl LocalReporter {
-    /// Makes a new one.
+    /// Instantiate a new LocalReporter writing into the provided directory.
     pub fn new(directory: impl Into<PathBuf>) -> Self {
         LocalReporter {
             directory: directory.into(),
@@ -34,7 +34,7 @@ impl LocalReporter {
     }
 
     /// Writes the jfr file to disk.
-    pub async fn report_profiling_data(
+    async fn report_profiling_data(
         &self,
         jfr: Vec<u8>,
         _metadata_obj: &ReportMetadata<'_>,
