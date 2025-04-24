@@ -31,6 +31,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tokio = { version = "1", features = ["test-util", "full"] }
 test-case = "3"
 rand = "0.9"
+humantime = "2"
 
 [[example]]
 name = 'simple'

@@ -2,13 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_profiler_agent::{
+    metadata::AgentMetadata,
     profiler::ProfilerBuilder,
-    reporter::s3::{S3Reporter, S3ReporterConfig},
+    reporter::{
+        local::LocalReporter,
+        s3::{S3Reporter, S3ReporterConfig},
+    },
 };
 use std::time::Duration;
 
 use aws_config::BehaviorVersion;
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 
 mod slow;
 
@@ -27,13 +31,26 @@ pub fn set_up_tracing() {
 
 /// Simple program to test the profiler agent
 #[derive(Parser, Debug)]
+#[command(group(
+    ArgGroup::new("options")
+        .required(true)
+        .args(["local", "bucket"]),
+))]
 struct Args {
     #[arg(long)]
-    profiling_group: String,
+    profiling_group: Option<String>,
     #[arg(long)]
-    bucket_owner: String,
+    bucket_owner: Option<String>,
+    #[arg(long, requires = "bucket_owner", requires = "profiling_group")]
+    bucket: Option<String>,
     #[arg(long)]
-    bucket: String,
+    local: Option<String>,
+    #[arg(long)]
+    #[clap(value_parser = humantime::parse_duration)]
+    duration: Option<Duration>,
+    #[arg(long, default_value = "30s")]
+    #[clap(value_parser = humantime::parse_duration)]
+    reporting_interval: Duration,
 }
 
 #[allow(unexpected_cfgs)]
@@ -56,23 +73,43 @@ async fn main_internal() -> Result<(), anyhow::Error> {
 
     let args = Args::parse();
 
-    let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;
-    let reporting_interval = Duration::from_secs(30);
+    let profiler = ProfilerBuilder::default();
 
-    let profiler = ProfilerBuilder::default()
-        .with_reporter(S3Reporter::new(S3ReporterConfig {
-            sdk_config: &sdk_config,
-            bucket_owner: args.bucket_owner,
-            bucket_name: args.bucket,
-            profiling_group_name: args.profiling_group,
-        }))
-        .with_reporting_interval(reporting_interval)
+    let profiler = match (
+        args.local,
+        args.bucket,
+        args.bucket_owner,
+        args.profiling_group,
+    ) {
+        (Some(local), _, _, _) => profiler
+            .with_reporter(LocalReporter::new(local))
+            .with_custom_agent_metadata(AgentMetadata::Other),
+        (_, Some(bucket), Some(bucket_owner), Some(profiling_group)) => {
+            profiler.with_reporter(S3Reporter::new(S3ReporterConfig {
+                sdk_config: &aws_config::defaults(BehaviorVersion::latest()).load().await,
+                bucket_owner: bucket_owner,
+                bucket_name: bucket,
+                profiling_group_name: profiling_group,
+            }))
+        }
+        _ => unreachable!(),
+    };
+
+    let profiler = profiler
+        .with_reporting_interval(args.reporting_interval)
         .build();
 
     tracing::info!("starting profiler");
     profiler.spawn()?;
     tracing::info!("profiler started");
 
-    slow::run().await;
+    if let Some(timeout) = args.duration {
+        tokio::time::timeout(timeout, slow::run())
+            .await
+            .unwrap_err();
+    } else {
+        slow::run().await;
+    }
+
     Ok(())
 }
