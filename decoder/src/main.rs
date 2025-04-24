@@ -1,4 +1,8 @@
-use std::{ffi::OsString, fs::File, io::Cursor};
+use std::{
+    ffi::OsString,
+    fs::File,
+    io::{self, Cursor, Write},
+};
 
 use clap::{Parser, Subcommand};
 use jfrs::reader::{
@@ -78,7 +82,7 @@ fn main() -> anyhow::Result<()> {
                     }
                 }
             };
-            print_samples(samples, stack_depth);
+            print_samples(&mut io::stdout(), samples, stack_depth).ok();
             Ok(())
         }
     }
@@ -94,7 +98,7 @@ fn symbol_to_string(s: Accessor<'_>) -> Option<&str> {
     None
 }
 
-fn print_samples(samples: Vec<Sample>, stack_depth: usize) {
+fn print_samples<F: Write>(to: &mut F, samples: Vec<Sample>, stack_depth: usize) -> io::Result<()> {
     for sample in samples {
         if sample.frames.iter().any(|f| {
             f.name.as_ref().is_some_and(|n| {
@@ -106,32 +110,37 @@ fn print_samples(samples: Vec<Sample>, stack_depth: usize) {
             // skip samples that are of sleeps
             continue;
         }
-        println!(
+        writeln!(
+            to,
             "[{:.6}] thread {} - poll of {}us",
             sample.start_time.as_secs_f64(),
             sample.thread_id,
             sample.delta_t.as_micros()
-        );
+        )?;
         for (i, frame) in sample.frames.iter().enumerate() {
             if i == stack_depth {
-                println!(
+                writeln!(
+                    to,
                     " - {:3} more frame(s) (pass --stack-depth={} to show)",
                     sample.frames.len() - stack_depth,
                     sample.frames.len()
-                );
+                )?;
                 break;
             }
-            println!(
+            writeln!(
+                to,
                 " - {:3}: {}.{}",
                 i + 1,
                 frame.class_name.as_deref().unwrap_or("<unknown>"),
                 frame.name.as_deref().unwrap_or("<unknown>")
-            );
+            )?;
         }
-        println!();
+        writeln!(to)?;
     }
+    Ok(())
 }
 
+#[derive(Debug)]
 struct Sample {
     delta_t: Duration,
     start_time: Duration,
@@ -139,6 +148,7 @@ struct Sample {
     frames: Vec<StackFrame>,
 }
 
+#[derive(Debug)]
 struct StackFrame {
     class_name: Option<String>,
     name: Option<String>,
@@ -535,4 +545,94 @@ where
         }
     }
     Ok(samples)
+}
+
+#[cfg(test)]
+mod test {
+    use super::{jfr_samples, print_samples, Sample, StackFrame};
+    use std::io;
+    use std::time::Duration;
+
+    #[test]
+    fn test_print_samples() {
+        let mut to = vec![];
+        print_samples(
+            &mut to,
+            vec![Sample {
+                delta_t: Duration::from_millis(1),
+                start_time: Duration::from_secs(1),
+                thread_id: 1,
+                frames: vec![
+                    StackFrame {
+                        class_name: None,
+                        name: None,
+                    },
+                    StackFrame {
+                        class_name: None,
+                        name: Some("foo".into()),
+                    },
+                    StackFrame {
+                        class_name: Some("cls".into()),
+                        name: Some("foo".into()),
+                    },
+                    StackFrame {
+                        class_name: Some("cls".into()),
+                        name: Some("bar".into()),
+                    },
+                ],
+            }],
+            3,
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(to).unwrap(),
+            r#"[1.000000] thread 1 - poll of 1000us
+ -   1: <unknown>.<unknown>
+ -   2: <unknown>.foo
+ -   3: cls.foo
+ -   1 more frame(s) (pass --stack-depth=4 to show)
+
+"#
+        );
+    }
+
+    #[test]
+    fn test_jfr_samples() {
+        let jfr = include_bytes!("../../tests/test.jfr");
+        let samples = jfr_samples(&mut io::Cursor::new(jfr), Duration::from_micros(200)).unwrap();
+        let mut to = vec![];
+        print_samples(&mut to, samples, 4).unwrap();
+        assert_eq!(
+            String::from_utf8(to).unwrap(),
+            r#"[95.789203] thread 1880 - poll of 219us
+ -   1: libc.so.6.clock_nanosleep
+ -   2: libc.so.6.nanosleep
+ -   3: simple.std::thread::sleep
+ -   4: simple.simple::slow::short_sleep
+ -  55 more frame(s) (pass --stack-depth=59 to show)
+
+[92.789145] thread 1881 - poll of 1733us
+ -   1: libc.so.6.clock_nanosleep
+ -   2: libc.so.6.nanosleep
+ -   3: simple.std::thread::sleep_ms
+ -   4: simple.simple::slow::accidentally_slow
+ -  55 more frame(s) (pass --stack-depth=59 to show)
+
+[96.789218] thread 1881 - poll of 203us
+ -   1: libc.so.6.clock_nanosleep
+ -   2: libc.so.6.nanosleep
+ -   3: simple.std::thread::sleep
+ -   4: simple.simple::slow::short_sleep
+ -  55 more frame(s) (pass --stack-depth=59 to show)
+
+[98.789191] thread 1881 - poll of 214us
+ -   1: libc.so.6.clock_nanosleep
+ -   2: libc.so.6.nanosleep
+ -   3: simple.std::thread::sleep
+ -   4: simple.simple::slow::short_sleep
+ -  55 more frame(s) (pass --stack-depth=59 to show)
+
+"#
+        );
+    }
 }
