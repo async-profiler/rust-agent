@@ -24,8 +24,6 @@ When starting, the profiler [dlopen(3)]'s `libasyncProfiler.so` and returns an `
 [^1]: the dlopen search path includes RPATH and LD_LIBRARY_PATH, but *not* the current directory to avoid current directory attacks.
 [dlopen(3)]: https://linux.die.net/man/3/dlopen
 
-You can write your own reporter (via the `Reporter` trait) to upload the profile results to your favorite profiler backend.
-
 You can use the S3 reporter, which uploads the reports to an S3 bucket, as follows:
 
 ```no_run
@@ -53,6 +51,8 @@ The S3 reporter uploads each report in a `zip` file, that currently contains 2 f
 
 The `zip` file is uploaded to the bucket under the path `profile_{profiling_group_name}_{machine}_{pid}_{time}.zip`,
 where `{machine}` is either `ec2_{ec2_instance_id}_`, `ecs_{cluster_arn}_{task_arn}`, or `onprem__`.
+
+In addition to the S3 reporter, `async-profiler-agent` also includes `LocalReporter` that writes to a directory, and a `MultiReporter` that allows combining reporters. You can also write your own reporter (via the `Reporter` trait) to upload the profile results to your favorite profiler backend.
 
 [JFR]: https://docs.oracle.com/javacomponents/jmc-5-4/jfr-runtime-guide/about.htm
 

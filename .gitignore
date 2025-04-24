@@ -1,2 +1,4 @@
 /target
 /decoder/target
+/tests/async-profiler
+/tests/profiles

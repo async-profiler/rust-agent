@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# This test needs to following resources:
+# 1. LD_LIBRARY_PATH set to an async-profiler with user JFR support
+# 2. executable `./pollcatch-decoder` from `cd decoder && cargo build`
+# 3. executable `./simple` from `RUSTFLAGS="--cfg tokio_unstable" cargo build --example simple`
+
+set -exuo pipefail
+
+mkdir -p profiles
+rm -f profiles/*.jfr
+./simple --local profiles --duration 60s --reporting-interval 15s
+for profile in profiles/*.jfr; do
+    short_sleeps_100=$(./pollcatch-decoder longpolls --stack-depth=10 "$profile" 100us | ( grep -c short_sleep_2 || true ))
+    short_sleeps_1000=$(./pollcatch-decoder longpolls --stack-depth=10 "$profile" 1000us | ( grep -c short_sleep_2 || true ))
+    long_sleeps_100=$(./pollcatch-decoder longpolls --stack-depth=10 "$profile" 100us | ( grep -c accidentally_slow_2 || true ))
+    long_sleeps_1000=$(./pollcatch-decoder longpolls --stack-depth=10 "$profile" 1000us | ( grep -c accidentally_slow_2 || true ))
+    # Long sleeps should occur in both the 100us and 1000us filters
+    if [ "$long_sleeps_100" -lt 1 ]; then
+        echo "No long sleeps in 100us"
+        ./pollcatch-decoder longpolls --stack-depth=10 "$profile" 100us
+        exit 1
+    fi
+    if [ "$long_sleeps_1000" -lt 1 ]; then
+        echo "No long sleeps in 1000us"
+        ./pollcatch-decoder longpolls --stack-depth=10 "$profile" 100us
+        exit 1
+    fi
+    # short sleeps should only occur in the 100us filter. Allow a small number of short sleeps if there was OS jank
+    if [ "$short_sleeps_100" -lt 5 ]; then
+        echo "No short sleeps in 100us"
+        ./pollcatch-decoder longpolls --stack-depth=10 "$profile" 100us
+        exit 1
+    fi
+    if [ "$short_sleeps_1000" -gt 5 ]; then
+        echo "Too many short sleeps in 1000us"
+        ./pollcatch-decoder longpolls --stack-depth=10 "$profile" 100us
+        exit 1
+    fi
+done
