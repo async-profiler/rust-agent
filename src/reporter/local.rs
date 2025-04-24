@@ -33,7 +33,7 @@ impl LocalReporter {
         }
     }
 
-    /// Makes a zip file, then uploads it.
+    /// Writes the jfr file to disk.
     pub async fn report_profiling_data(
         &self,
         jfr: Vec<u8>,
@@ -43,6 +43,7 @@ impl LocalReporter {
         let time = time
             .to_rfc3339_opts(SecondsFormat::Secs, true)
             .replace(":", "-");
+        tracing::debug!("reporting {time}.jfr");
         let file_name = format!("{time}.jfr");
         tokio::fs::write(self.directory.join(file_name), jfr).await?;
         Ok(())
