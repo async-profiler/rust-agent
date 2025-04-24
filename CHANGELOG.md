@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.2](https://github.com/async-profiler/rust-agent/compare/v0.1.1...v0.1.2) - 2025-04-24
+
+### Added
+
+- implement LocalReporter
+- implement MultiReporter
+- add JFR decoder implementation (not published in crates.io)
+
+### Other
+
+- add test for decoder against JFR file
+- add integration tests
+
+## [0.1.1](https://github.com/async-profiler/rust-agent/compare/v0.1.0...v0.1.1) - 2025-04-16
+
 ### 🚀 Features
 
 - Add initial support for pollcatch
