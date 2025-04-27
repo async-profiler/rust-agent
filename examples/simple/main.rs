@@ -51,12 +51,19 @@ struct Args {
     #[arg(long, default_value = "30s")]
     #[clap(value_parser = humantime::parse_duration)]
     reporting_interval: Duration,
+    #[arg(long)]
+    worker_threads: Option<usize>,
 }
 
 #[allow(unexpected_cfgs)]
 pub fn main() -> anyhow::Result<()> {
+    let args = Args::parse();
+
     let mut rt: tokio::runtime::Builder = tokio::runtime::Builder::new_multi_thread();
     rt.enable_all();
+    if let Some(worker_threads) = args.worker_threads {
+        rt.worker_threads(worker_threads);
+    }
 
     #[cfg(tokio_unstable)]
     {
@@ -64,14 +71,12 @@ pub fn main() -> anyhow::Result<()> {
             .on_after_task_poll(|_| async_profiler_agent::pollcatch::after_poll_hook());
     }
     let rt = rt.build().unwrap();
-    rt.block_on(main_internal())
+    rt.block_on(main_internal(args))
 }
 
-async fn main_internal() -> Result<(), anyhow::Error> {
+async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
     set_up_tracing();
     tracing::info!("main started");
-
-    let args = Args::parse();
 
     let profiler = ProfilerBuilder::default();
 
