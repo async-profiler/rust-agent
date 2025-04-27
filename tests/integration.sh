@@ -9,7 +9,8 @@ set -exuo pipefail
 
 mkdir -p profiles
 rm -f profiles/*.jfr
-./simple --local profiles --duration 60s --reporting-interval 15s
+# Pass --worker-threads 16 to make the test much less flaky since there is always some worker thread running
+./simple --local profiles --duration 60s --reporting-interval 15s --worker-threads 16
 for profile in profiles/*.jfr; do
     short_sleeps_100=$(./pollcatch-decoder longpolls --stack-depth=10 "$profile" 100us | ( grep -c short_sleep_2 || true ))
     short_sleeps_1000=$(./pollcatch-decoder longpolls --stack-depth=10 "$profile" 1000us | ( grep -c short_sleep_2 || true ))
