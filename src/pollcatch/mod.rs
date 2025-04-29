@@ -17,6 +17,13 @@
 //! let rt = rt.build().unwrap();
 //! rt.block_on(your_main())
 //! ```
+//!
+//! Except on a poll that is involved in a profiling sample, the poll hook overhead
+//! is limited to a few thread-local accesses and should be very very fast.
+//!
+//! When a profiling sample is taken (normally around 1 / second), it adds slightly
+//! more overhead to report the sample, but that is a matter of microseconds
+//! and therefore should not worsen tail latency problems.
 
 use std::{
     cell::Cell,
