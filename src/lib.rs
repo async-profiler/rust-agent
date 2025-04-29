@@ -20,9 +20,10 @@
 //! so make sure there is a `libasyncProfiler.so` in the search path[^1].
 //!
 //! [^1]: the dlopen search path includes RPATH and LD_LIBRARY_PATH, but *not* the current directory to avoid current directory attacks.
-//! [dlopen(3)]: <https://linux.die.net/man/3/dlopen>
 //!
-//! You can use the [S3Reporter], which uploads the reports to an S3 bucket, as follows:
+//! [dlopen(3)]: https://linux.die.net/man/3/dlopen
+//!
+//! You can use the [`S3Reporter`], which uploads the reports to an S3 bucket, as follows:
 //!
 //! ```no_run
 //! # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
@@ -51,7 +52,7 @@
 //! # }
 //! ```
 //!
-//! The [S3Reporter] uploads each report in a `zip` file, that currently contains 2 files:
+//! The [`S3Reporter`] uploads each report in a `zip` file, that currently contains 2 files:
 //! 1. a [JFR] as `async_profiler_dump_0.jfr`
 //! 2. metadata as `metadata.json`, in format [`reporter::s3::MetadataJson`].
 //!
@@ -61,6 +62,7 @@
 //! In addition to the S3 reporter, this crate also includes [`LocalReporter`] that writes to a directory, and a `MultiReporter` that allows combining reporters. You can also write your own reporter (via the `Reporter` trait) to upload the profile results to your favorite profiler backend.
 //!
 //! [`LocalReporter`]: reporter::local::LocalReporter
+//! [`S3Reporter`]: reporter::s3::S3Reporter
 //! [JFR]: https://docs.oracle.com/javacomponents/jmc-5-4/jfr-runtime-guide/about.htm
 //!
 //! #### Sample program
