@@ -38,7 +38,7 @@ let profiler = ProfilerBuilder::default()
         sdk_config: &sdk_config,
         bucket_owner: bucket_owner.into(),
         bucket_name: bucket_name.into(),
-        profiling_group: profiling_group.into(),
+        profiling_group_name: profiling_group.into(),
     }))
     .build();
 

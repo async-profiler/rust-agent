@@ -1,3 +1,5 @@
+//! A reporter that reports profiling results to several destinations.
+
 use async_trait::async_trait;
 
 use crate::metadata::ReportMetadata;
@@ -69,7 +71,7 @@ impl Reporter for MultiReporter {
 }
 
 #[cfg(test)]
-pub mod test {
+mod test {
     use std::{
         sync::{
             atomic::{self, AtomicBool},

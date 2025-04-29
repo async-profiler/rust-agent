@@ -1,43 +1,62 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+//! Contains functions for getting host metadata from [IMDS]
+//!
+//! [IMDS]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
+
 use reqwest::Method;
 use serde::Deserialize;
 use thiserror::Error;
 
 use super::AgentMetadata;
 
+/// An error converting Fargate IMDS metadata to Agent metadata. This error
+/// should probably not happen except in case of a bug in either this crate or IMDS.
 #[derive(Error, Debug)]
 pub enum FargateMetadataToAgentMetadataError {
+    /// unable to parse task ARN as a valid ARN
     #[error("unable to parse task ARN as a valid ARN")]
     TaskArnInvalid(#[from] aws_arn::Error),
+    /// AWS account id not found in Fargate metadata
     #[error("AWS account id not found in Fargate metadata")]
     AccountIdNotFound,
+    /// AWS region not found in Fargate metadata
     #[error("AWS region not found in Fargate metadata")]
     AwsRegionNotFound,
 }
 
+/// An error getting IMDS metadata
 #[derive(Error, Debug)]
 #[error("profiler metadata error: {0}")]
 pub enum AwsProfilerMetadataError {
+    /// Internal IO error
     #[error("failed to create profiler metadata file: {0}")]
     FailedToCreateFile(#[from] std::io::Error),
 
+    /// Error parsing IMDS metadata. Should normally not happen except in case of a bug
     #[error("failed fetching valid Fargate metadata: {0}")]
     FargateMetadataToAgentMetadataError(#[from] FargateMetadataToAgentMetadataError),
 
-    #[error("retrieved invalid endpoint URI: {0}")]
+    /// Invalid endpoint URI in `ECS_CONTAINER_METADATA_URI_V4`
+    #[error("retrieved invalid endpoint URI from ECS_CONTAINER_METADATA_URI_V4: {0}")]
     InvalidUri(String),
 
+    /// Failed to fetch metadata from FarGate endpoint
     #[error("failed to fetch metadata from endpoint over HTTP: {0}")]
     FailedToFetchMetadataFromEndpoint(reqwest::Error),
 
+    /// Failed to fetch metadata from IMDS
     #[error("failed to fetch metadata from IMDS endpoint over HTTP: {0}")]
     FailedToFetchMetadataFromImds(#[from] aws_config::imds::client::error::ImdsError),
 
+    /// Failed to parse metadata from IMDS - this indicates a bug in this crate
+    /// or in IMDS
     #[error("failed to parse metadata as valid UTF-8 from endpoint over HTTP: {0}")]
     FailedToParseMetadataFromEndpoint(reqwest::Error),
 
+    /// Failed to serialize metadata file - this indicates a bug in this crate
+    /// or in IMDS
     #[error("failed to serialize metadata file: {0}")]
     FailedToSerializeMetadataFile(#[from] serde_json::Error),
 }
@@ -132,6 +151,13 @@ impl super::AgentMetadata {
     }
 }
 
+/// Load agent metadata from [Fargate] or [IMDS].
+///
+/// This will return an error if this machine does not appear to be a [Fargate] or [EC2].
+///
+/// [Fargate]: https://aws.amazon.com/fargate
+/// [IMDS]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
+/// [EC2]: https://aws.amazon.com/ec2
 pub async fn load_agent_metadata() -> Result<AgentMetadata, AwsProfilerMetadataError> {
     let agent_metadata: AgentMetadata = match read_ec2_metadata().await {
         Ok(imds_ec2_instance_metadata) => {

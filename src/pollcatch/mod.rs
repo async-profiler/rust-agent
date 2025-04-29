@@ -1,3 +1,23 @@
+//! To emit `tokio.PollCatchV1` events, you can set up the task hooks when setting up your Tokio runtime:
+//!
+//! Then, you can use the `decoder` (look at the crate README) to find long polls in your program.
+//!
+//! Use it around your `main` like this:
+//! ```
+//! # async fn your_main() {}
+//!
+//! let mut rt: tokio::runtime::Builder = tokio::runtime::Builder::new_multi_thread();
+//! rt.enable_all();
+//!
+//! #[cfg(tokio_unstable)]
+//! {
+//!     rt.on_before_task_poll(|_| async_profiler_agent::pollcatch::before_poll_hook())
+//!      .on_after_task_poll(|_| async_profiler_agent::pollcatch::after_poll_hook());
+//! }
+//! let rt = rt.build().unwrap();
+//! rt.block_on(your_main())
+//! ```
+
 use std::{
     cell::Cell,
     sync::{
