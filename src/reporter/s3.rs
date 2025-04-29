@@ -1,6 +1,8 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A reporter that uploads reports to an S3 bucket
+
 use async_trait::async_trait;
 use aws_config::SdkConfig;
 use chrono::SecondsFormat;
@@ -16,19 +18,26 @@ use crate::metadata::{AgentMetadata, ReportMetadata};
 
 use super::Reporter;
 
+/// Error reporting to S3
 #[derive(Error, Debug)]
 pub enum S3ReporterError {
+    /// I/O error creating zip file
     #[error("io error creating zip file: {0}")]
     ZipIoError(std::io::Error),
+    /// Error creating zip file
     #[error("creating zip file: {0}")]
     ZipError(#[from] ZipError),
+    /// Error sending data to S3
     #[error("failed to send profile data directly to S3: {0}")]
     SendProfileS3Data(Box<aws_sdk_s3::Error>),
+    /// Error joining Tokio task
     #[error("tokio task: {0}")]
     JoinError(#[from] tokio::task::JoinError),
 }
 
+/// This is the format of the metadata JSON uploaded to S3.
 #[derive(Debug, Serialize)]
+#[non_exhaustive]
 pub struct MetadataJson {
     start: u64,
     end: u64,
@@ -47,7 +56,7 @@ pub struct S3ReporterConfig<'a> {
     pub profiling_group_name: String,
 }
 
-/// A reporter for S3.
+/// A reporter that uploads reports to an S3 bucket
 pub struct S3Reporter {
     s3_client: aws_sdk_s3::Client,
     bucket_owner: String,
@@ -56,7 +65,7 @@ pub struct S3Reporter {
 }
 
 impl S3Reporter {
-    /// Makes a new one.
+    /// Create a new S3Reporter
     pub fn new(config: S3ReporterConfig<'_>) -> Self {
         let S3ReporterConfig {
             sdk_config,

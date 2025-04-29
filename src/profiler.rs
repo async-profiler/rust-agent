@@ -1,6 +1,8 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A profiler that periodically uploads profiling samples of your program to a [Reporter]
+
 use crate::{
     asprof::{self, AsProfError},
     metadata::{aws::AwsProfilerMetadataError, AgentMetadata, ReportMetadata},
@@ -206,9 +208,12 @@ enum TickError {
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
+/// An error that happened spawning a profiler
 pub enum SpawnError {
+    /// Error interactive with async-profiler
     #[error(transparent)]
     AsProf(#[from] asprof::AsProfError),
+    /// Error writing to a tempfile
     #[error("tempfile error: {0}")]
     TempFile(io::Error),
 }

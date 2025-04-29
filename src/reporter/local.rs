@@ -1,6 +1,8 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+//! A reporter that reports into a directory.
+
 use async_trait::async_trait;
 use chrono::SecondsFormat;
 use std::path::PathBuf;

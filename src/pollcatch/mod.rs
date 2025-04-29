@@ -1,3 +1,30 @@
+//! To emit `tokio.PollCatchV1` events, you can set up the task hooks when setting up your Tokio runtime:
+//!
+//! Then, you can use the `decoder` (look at the crate README) to find long polls in your program.
+//!
+//! Use it around your `main` like this:
+//! ```
+//! # async fn your_main() {}
+//!
+//! let mut rt: tokio::runtime::Builder = tokio::runtime::Builder::new_multi_thread();
+//! rt.enable_all();
+//!
+//! #[cfg(tokio_unstable)]
+//! {
+//!     rt.on_before_task_poll(|_| async_profiler_agent::pollcatch::before_poll_hook())
+//!      .on_after_task_poll(|_| async_profiler_agent::pollcatch::after_poll_hook());
+//! }
+//! let rt = rt.build().unwrap();
+//! rt.block_on(your_main())
+//! ```
+//!
+//! Except on a poll that is involved in a profiling sample, the poll hook overhead
+//! is limited to a few thread-local accesses and should be very very fast.
+//!
+//! When a profiling sample is taken (normally around 1 / second), it adds slightly
+//! more overhead to report the sample, but that is a matter of microseconds
+//! and therefore should not worsen tail latency problems.
+
 use std::{
     cell::Cell,
     sync::{
