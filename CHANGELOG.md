@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.4](https://github.com/arielb1/rust-agent/compare/v0.1.3...v0.1.4) - 2025-04-29
+
+### Other
+
+- fix links in docs
+
 ## [0.1.3](https://github.com/async-profiler/rust-agent/compare/v0.1.2...v0.1.3) - 2025-04-29
 
 ### Other
