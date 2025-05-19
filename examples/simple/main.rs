@@ -3,7 +3,7 @@
 
 use async_profiler_agent::{
     metadata::AgentMetadata,
-    profiler::ProfilerBuilder,
+    profiler::{ProfilerBuilder, ProfilerOptionsBuilder},
     reporter::{
         local::LocalReporter,
         s3::{S3Reporter, S3ReporterConfig},
@@ -102,6 +102,7 @@ async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
 
     let profiler = profiler
         .with_reporting_interval(args.reporting_interval)
+        .with_profiler_options(ProfilerOptionsBuilder::default().with_native_mem("0".to_string()).build())
         .build();
 
     tracing::info!("starting profiler");
