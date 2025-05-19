@@ -334,6 +334,36 @@ pub enum SpawnError {
     TempFile(io::Error),
 }
 
+struct Detach;
+
+/// A handle to a running profiler
+///
+/// Currently just allows for stopping the profiler.
+///
+/// Dropping this handle will request that the profiler will stop.
+#[must_use = "dropping this stops the profiler, call .detach() to detach"]
+pub struct RunningProfiler {
+    stop_channel: tokio::sync::oneshot::Sender<Detach>,
+    join_handle: tokio::task::JoinHandle<()>,
+}
+
+impl RunningProfiler {
+    /// Request that the current profiler stops and wait until it finishes.
+    ///
+    /// This will cause the currently-pending profile information to be flushed
+    pub async fn stop(self) {
+        drop(self.stop_channel);
+        let _ = self.join_handle.await;
+    }
+
+    /// Detach this profiler. This will prevent the profiler from being stopped
+    /// when this handle is dropped
+    pub fn detach(self) -> tokio::task::JoinHandle<()> {
+        self.stop_channel.send(Detach).ok();
+        self.join_handle
+    }
+}
+
 /// Rust profiler based on [async-profiler].
 ///
 /// [async-profiler]: https://github.com/async-profiler/async-profiler
@@ -347,21 +377,28 @@ pub struct Profiler {
 impl Profiler {
     /// Start profiling. The profiler will run in a tokio task at the configured interval.
     pub fn spawn(self) -> Result<tokio::task::JoinHandle<()>, SpawnError> {
+        self.spawn_controllable().map(RunningProfiler::detach)
+    }
+
+    /// Like [Self::spawn], but returns a [RunningProfiler] that allows for controlling
+    /// (currently only stopping) the profiler.
+    ///
+    /// Dropping the [RunningProfiler] will cause the profiler to quit,
+    pub fn spawn_controllable(self) -> Result<RunningProfiler, SpawnError> {
         self.spawn_inner(asprof::AsProf::builder().build())
     }
 
-    fn spawn_inner<E: ProfilerEngine>(
-        self,
-        asprof: E,
-    ) -> Result<tokio::task::JoinHandle<()>, SpawnError> {
+    fn spawn_inner<E: ProfilerEngine>(self, asprof: E) -> Result<RunningProfiler, SpawnError> {
         // Initialize async profiler - needs to be done once.
         E::init_async_profiler()?;
         tracing::info!("successfully initialized async profiler.");
 
         let mut sampling_ticker = tokio::time::interval(self.reporting_interval);
+        let (stop_channel, mut stop_rx) = tokio::sync::oneshot::channel();
+        let (abort_channel, mut abort_rx) = tokio::sync::oneshot::channel::<()>();
 
         // Get profiles at the configured interval rate.
-        Ok(tokio::spawn(async move {
+        let loop_join_handle = tokio::spawn(async move {
             let mut state = match ProfilerState::new(asprof, self.profiler_options) {
                 Ok(state) => state,
                 Err(err) => {
@@ -372,11 +409,38 @@ impl Profiler {
 
             // Lazily-loaded if not specified up front.
             let mut agent_metadata = self.agent_metadata;
+            let mut done = false;
+            let mut detached = false;
 
-            loop {
-                // Start timer.
-                let _ = sampling_ticker.tick().await;
-                tracing::debug!("profiler timer woke up");
+            while !done {
+                'next_tick: loop {
+                    // Wait until a timer or exit event
+                    tokio::select! {
+                        biased;
+
+                        r = &mut stop_rx, if !stop_rx.is_terminated() => {
+                            match r {
+                                Ok(Detach) => detached = true,
+                                Err(_) => {
+                                    if !detached {
+                                        tracing::info!("profiler stop requested, doing a final tick");
+                                        done = true;
+                                        break 'next_tick;
+                                    }
+                                }
+                            }
+                        }
+                        _ = &mut abort_rx, if !abort_rx.is_terminated() => {
+                            tracing::info!("profiler abort requested, stopping");
+                            done = true;
+                            break 'next_tick;
+                        }
+                        _ = sampling_ticker.tick() => {
+                            tracing::debug!("profiler timer woke up");
+                            break 'next_tick;
+                        }
+                    }
+                }
 
                 if let Err(err) = profiler_tick(
                     &mut state,
@@ -400,7 +464,19 @@ impl Profiler {
             }
 
             tracing::info!("profiling task finished");
-        }))
+        });
+
+        // return a separate join handle to make it impossible to abort the loop task in mid job
+        let join_handle = tokio::task::spawn(async move {
+            // control the channel so that dropping this task will
+            let _abort_channel = abort_channel;
+            loop_join_handle.await.ok();
+        });
+
+        Ok(RunningProfiler {
+            stop_channel,
+            join_handle,
+        })
     }
 }
 
@@ -558,6 +634,37 @@ mod tests {
             .spawn_inner::<MockProfilerEngine>(MockProfilerEngine {
                 counter: AtomicU32::new(0),
             })
+            .unwrap()
+            .detach();
+        let (jfr, md) = rx.recv().await.unwrap();
+        assert_eq!(jfr, "JFR0");
+        assert_eq!(e_md, md);
+        let (jfr, md) = rx.recv().await.unwrap();
+        assert_eq!(jfr, "JFR1");
+        assert_eq!(e_md, md);
+    }
+
+    enum StopKind {
+        Delibrate,
+        Drop,
+        Abort,
+    }
+
+    #[tokio::test(start_paused = true)]
+    #[test_case(StopKind::Delibrate; "deliberate stop")]
+    #[test_case(StopKind::Drop; "drop stop")]
+    #[test_case(StopKind::Abort; "abort stop")]
+    async fn test_profiler_stop(stop_kind: StopKind) {
+        let e_md = AgentMetadata::Ec2AgentMetadata {
+            aws_account_id: "0".into(),
+            aws_region_id: "us-east-1".into(),
+            ec2_instance_id: "i-fake".into(),
+        };
+        let (agent, mut rx) = make_mock_profiler();
+        let profiler_ref = agent
+            .spawn_inner::<MockProfilerEngine>(MockProfilerEngine {
+                counter: AtomicU32::new(0),
+            })
             .unwrap();
         let (jfr, md) = rx.recv().await.unwrap();
         assert_eq!(jfr, "JFR0");
@@ -565,6 +672,27 @@ mod tests {
         let (jfr, md) = rx.recv().await.unwrap();
         assert_eq!(jfr, "JFR1");
         assert_eq!(e_md, md);
+        // check that stop is faster than an interval and returns an "immediate" next jfr
+        match stop_kind {
+            StopKind::Drop => drop(profiler_ref),
+            StopKind::Delibrate => {
+                tokio::time::timeout(Duration::from_millis(1), profiler_ref.stop())
+                    .await
+                    .unwrap();
+            }
+            StopKind::Abort => {
+                // You can call Abort on the JoinHandle. make sure that is not buggy.
+                profiler_ref.detach().abort();
+            }
+        }
+        // check that we get the next JFR "quickly", and the JFR after that is empty.
+        let (jfr, md) = tokio::time::timeout(Duration::from_millis(1), rx.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(jfr, "JFR2");
+        assert_eq!(e_md, md);
+        assert!(rx.recv().await.is_none());
     }
 
     // simulate a badly-behaved profiler that errors on start/stop and then
@@ -613,12 +741,13 @@ mod tests {
             start_error,
             counter: counter.clone(),
         };
-        agent.spawn_inner(engine).unwrap();
+        let handle = agent.spawn_inner(engine).unwrap().detach();
         assert!(rx.recv().await.is_none());
         // check that the "sleep 5" step in start_async_profiler succeeds
         for _ in 0..100 {
             tokio::time::sleep(Duration::from_secs(1)).await;
             if counter.load(atomic::Ordering::Acquire) {
+                handle.await.unwrap(); // Check that the JoinHandle is done
                 return;
             }
         }
