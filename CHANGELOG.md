@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.5](https://github.com/async-profiler/rust-agent/compare/v0.1.4...v0.1.5) - 2025-05-20
+
+### Added
+
+- add support for stopping the profiler
+- make native memory profiling interval configurable
+
+### Other
+
+- ci: fix caching of decoder
+
 ## [0.1.4](https://github.com/arielb1/rust-agent/compare/v0.1.3...v0.1.4) - 2025-04-29
 
 ### Other
