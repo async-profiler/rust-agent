@@ -9,18 +9,19 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1"
+# not really an AWS crate so no need to disable default features
 aws-arn = { version = "0.3", optional = true }
-aws-config = { version = "1", optional = true }
-aws-sdk-s3 = { version = "1", optional = true }
+aws-config = { version = "1", optional = true, default-features = false }
+aws-sdk-s3 = { version = "1", optional = true, default-features = false }
 chrono = "0.4"
-futures = { version = "0.3", default-features = false }
+futures = { version = "0.3", default-features = false, features = ["alloc"] }
 libloading = "0.8"
-reqwest = { version = "0.12", default-features = false, optional = true, features = ["charset", "http2", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, optional = true, features = ["charset", "http2"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
 thiserror = "2"
-tokio = { version = "1", features = ["macros"], optional = true }
+tokio = { version = "1", features = ["fs", "macros", "rt", "sync", "time"] }
 tracing = "0.1"
 zip = { version = "3", default-features = false, features = ["deflate"] }
 
@@ -38,5 +39,9 @@ name = 'simple'
 
 [features]
 default = ["s3", "aws-metadata"]
-s3 = ["dep:aws-config", "dep:aws-sdk-s3", "dep:tokio"]
-aws-metadata = ["dep:reqwest", "dep:aws-config", "dep:aws-arn"]
+s3 = ["s3-no-defaults", "aws-config/default", "aws-sdk-s3/default"]
+# A version of the s3 feature that does not enable AWS default features
+s3-no-defaults = ["dep:aws-config", "dep:aws-sdk-s3"]
+aws-metadata = ["aws-metadata-no-defaults", "aws-config/default", "reqwest/rustls-tls"]
+# A version of the aws-metadata feature that does not enable AWS default features
+aws-metadata-no-defaults = ["dep:reqwest", "dep:aws-config", "dep:aws-arn"]

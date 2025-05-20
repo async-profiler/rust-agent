@@ -25,7 +25,8 @@
 //!
 //! You can use the [`S3Reporter`], which uploads the reports to an S3 bucket, as follows:
 //!
-//! ```no_run
+#![cfg_attr(feature = "s3-no-defaults", doc = "```no_run")]
+#![cfg_attr(not(feature = "s3-no-defaults"), doc = "```compile_fail")]
 //! # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
 //! # use async_profiler_agent::reporter::s3::{S3Reporter, S3ReporterConfig};
 //! # use aws_config::BehaviorVersion;

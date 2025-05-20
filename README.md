@@ -89,6 +89,12 @@ emit `tokio.PollCatchV1` events this way:
     }
 ```
 
+### Not enabling the AWS SDK / Reqwest default features
+
+The `aws-metadata-no-defaults` and `s3-no-defaults` feature flags do not enable feature flags for the AWS SDK and `reqwest`. 
+
+If you want things to work, you'll need to enable features for these crates to allow at least a TLS provider. This can be used to use a TLS provider other than the default Rustls
+
 ## Decoder
 
 The `decoder` directory in the Git repository contains a decoder that can be used to view JFR files, especially with PollCatch information.

@@ -10,6 +10,11 @@ jobs:
         toolchain:
           - "1.85" # Current MSRV due to Cargo MSRV feature
           - stable
+        flags:
+          - "--all-features"
+          - "--no-default-features"
+          - "--no-default-features --features=s3-no-defaults"
+          - "--no-default-features --features=aws-metadata-no-defaults"
     env:
       RUST_BACKTRACE: 1
     steps:
@@ -18,6 +23,7 @@ jobs:
         uses: ./.github/actions/rust-build
         with:
           toolchain: ${{ matrix.toolchain }}
+          flags: ${{ matrix.flags }}
   build-for-testing:
     name: Build for testing
     runs-on: ubuntu-latest
