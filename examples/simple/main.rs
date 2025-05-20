@@ -3,7 +3,7 @@
 
 use async_profiler_agent::{
     metadata::AgentMetadata,
-    profiler::ProfilerBuilder,
+    profiler::{ProfilerBuilder, ProfilerOptionsBuilder},
     reporter::{
         local::LocalReporter,
         s3::{S3Reporter, S3ReporterConfig},
@@ -53,6 +53,8 @@ struct Args {
     reporting_interval: Duration,
     #[arg(long)]
     worker_threads: Option<usize>,
+    #[arg(long)]
+    native_mem: Option<String>,
 }
 
 #[allow(unexpected_cfgs)]
@@ -100,8 +102,15 @@ async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
         _ => unreachable!(),
     };
 
+    let mut builder = ProfilerOptionsBuilder::default();
+    if let Some(native_mem) = &args.native_mem {
+        builder = builder.with_native_mem(native_mem.clone());
+    }
+    let profiler_options = builder.build();
+
     let profiler = profiler
         .with_reporting_interval(args.reporting_interval)
+        .with_profiler_options(profiler_options)
         .build();
 
     tracing::info!("starting profiler");

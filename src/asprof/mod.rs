@@ -1,6 +1,7 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::profiler::ProfilerOptions;
 use std::{
     ffi::{c_char, CStr, CString},
     path::Path,
@@ -102,13 +103,14 @@ impl super::profiler::ProfilerEngine for AsProf {
         Ok(())
     }
 
-    fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), self::AsProfError> {
+    fn start_async_profiler(
+        &self,
+        jfr_file_path: &Path,
+        options: &ProfilerOptions,
+    ) -> Result<(), self::AsProfError> {
         tracing::debug!("starting the async-profiler and giving JFR file path: {jfr_file_path:?}");
 
-        let args = format!(
-            "start,event=cpu,interval=100000000,wall=1000ms,jfr,cstack=dwarf,file={}",
-            jfr_file_path.display()
-        );
+        let args = options.to_args_string(jfr_file_path);
 
         Self::asprof_execute(&args)?;
         tracing::debug!("async-profiler started successfully");

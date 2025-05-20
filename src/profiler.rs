@@ -71,6 +71,108 @@ impl JfrFile {
     }
 }
 
+/// Options for configuring the async-profiler behavior.
+/// Currently supports:
+/// - Native memory allocation tracking
+#[derive(Debug, Default)]
+pub struct ProfilerOptions {
+    /// If set, the profiler will collect information about
+    /// native memory allocations.
+    ///
+    /// The value is the interval in bytes or in other units,
+    /// if followed by k (kilobytes), m (megabytes), or g (gigabytes).
+    /// For example, `"10m"` will sample an allocation for every
+    /// 10 megabytes of memory allocated. Passing `"0"` will sample
+    /// all allocations.
+    ///
+    /// See [ProfilingModes in the async-profiler docs] for more details.
+    ///
+    /// [ProfilingModes in the async-profiler docs]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilingModes.md#native-memory-leaks
+    pub native_mem: Option<String>,
+}
+
+impl ProfilerOptions {
+    /// Convert the profiler options to a string of arguments for the async-profiler.
+    pub fn to_args_string(&self, jfr_file_path: &std::path::Path) -> String {
+        let mut args = format!(
+            "start,event=cpu,interval=100000000,wall=1000ms,jfr,cstack=dwarf,file={}",
+            jfr_file_path.display()
+        );
+        if let Some(ref native_mem) = self.native_mem {
+            args.push_str(&format!(",nativemem={}", native_mem));
+        }
+        args
+    }
+}
+
+/// Builder for [`ProfilerOptions`].
+#[derive(Debug, Default)]
+pub struct ProfilerOptionsBuilder {
+    native_mem: Option<String>,
+}
+
+impl ProfilerOptionsBuilder {
+    /// If set, the profiler will collect information about
+    /// native memory allocations.
+    ///
+    /// The value is the interval in bytes or in other units,
+    /// if followed by k (kilobytes), m (megabytes), or g (gigabytes).
+    ///
+    /// See [ProfilingModes in the async-profiler docs] for more details.
+    ///
+    /// [ProfilingModes in the async-profiler docs]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilingModes.md#native-memory-leaks
+    ///
+    /// ### Examples
+    ///
+    /// This will sample allocations for every 10 megabytes allocated:
+    ///
+    /// ```
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # fn main() -> Result<(), SpawnError> {
+    /// let opts = ProfilerOptionsBuilder::default().with_native_mem("10m".into()).build();
+    /// let profiler = ProfilerBuilder::default()
+    ///     .with_profiler_options(opts)
+    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .build();
+    /// # if false { // don't spawn the profiler in doctests
+    /// profiler.spawn()?;
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// This will sample every allocation (potentially slow):
+    /// ```
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # fn main() -> Result<(), SpawnError> {
+    /// let opts = ProfilerOptionsBuilder::default().with_native_mem("0".into()).build();
+    /// let profiler = ProfilerBuilder::default()
+    ///     .with_profiler_options(opts)
+    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .build();
+    /// # if false { // don't spawn the profiler in doctests
+    /// profiler.spawn()?;
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_native_mem(mut self, native_mem_interval: String) -> Self {
+        self.native_mem = Some(native_mem_interval);
+        self
+    }
+
+    /// Build the [`ProfilerOptions`] from the builder.
+    pub fn build(self) -> ProfilerOptions {
+        ProfilerOptions {
+            native_mem: self.native_mem,
+        }
+    }
+}
+
 /// Builds a [`Profiler`], panicking if any required fields were not set by the
 /// time `build` is called.
 #[derive(Debug, Default)]
@@ -78,6 +180,7 @@ pub struct ProfilerBuilder {
     reporting_interval: Option<Duration>,
     reporter: Option<Box<dyn Reporter + Send + Sync>>,
     agent_metadata: Option<AgentMetadata>,
+    profiler_options: Option<ProfilerOptions>,
 }
 
 impl ProfilerBuilder {
@@ -99,12 +202,19 @@ impl ProfilerBuilder {
         self
     }
 
+    /// Provide custom profiler options.
+    pub fn with_profiler_options(mut self, c: ProfilerOptions) -> ProfilerBuilder {
+        self.profiler_options = Some(c);
+        self
+    }
+
     /// Turn this builder into a profiler!
     pub fn build(self) -> Profiler {
         Profiler {
             reporting_interval: self.reporting_interval.unwrap_or(Duration::from_secs(30)),
             reporter: self.reporter.expect("reporter is required"),
             agent_metadata: self.agent_metadata,
+            profiler_options: self.profiler_options.unwrap_or_default(),
         }
     }
 }
@@ -123,14 +233,16 @@ struct ProfilerState<E: ProfilerEngine> {
     jfr_file: Option<JfrFile>,
     asprof: E,
     status: Status,
+    profiler_options: ProfilerOptions,
 }
 
 impl<E: ProfilerEngine> ProfilerState<E> {
-    pub fn new(asprof: E) -> Result<Self, io::Error> {
+    pub fn new(asprof: E, profiler_options: ProfilerOptions) -> Result<Self, io::Error> {
         Ok(Self {
             jfr_file: Some(JfrFile::new()?),
             asprof,
             status: Status::Idle,
+            profiler_options,
         })
     }
 
@@ -142,7 +254,7 @@ impl<E: ProfilerEngine> ProfilerState<E> {
         let active = self.jfr_file.as_ref().unwrap().active_path();
         // drop guard - make sure the files are leaked if the profiler might have started
         self.status = Status::Starting;
-        E::start_async_profiler(&self.asprof, &active)?;
+        E::start_async_profiler(&self.asprof, &active, &self.profiler_options)?;
         self.status = Status::Running(SystemTime::now());
         Ok(())
     }
@@ -185,7 +297,11 @@ impl<E: ProfilerEngine> Drop for ProfilerState<E> {
 
 pub(crate) trait ProfilerEngine: Send + Sync + 'static {
     fn init_async_profiler() -> Result<(), asprof::AsProfError>;
-    fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), asprof::AsProfError>;
+    fn start_async_profiler(
+        &self,
+        jfr_file_path: &Path,
+        options: &ProfilerOptions,
+    ) -> Result<(), asprof::AsProfError>;
     fn stop_async_profiler() -> Result<(), asprof::AsProfError>;
 }
 
@@ -225,6 +341,7 @@ pub struct Profiler {
     reporting_interval: Duration,
     reporter: Box<dyn Reporter + Send + Sync>,
     agent_metadata: Option<AgentMetadata>,
+    profiler_options: ProfilerOptions,
 }
 
 impl Profiler {
@@ -245,7 +362,7 @@ impl Profiler {
 
         // Get profiles at the configured interval rate.
         Ok(tokio::spawn(async move {
-            let mut state = match ProfilerState::new(asprof) {
+            let mut state = match ProfilerState::new(asprof, self.profiler_options) {
                 Ok(state) => state,
                 Err(err) => {
                     tracing::error!(?err, "unable to create profiler state");
@@ -373,7 +490,11 @@ mod tests {
             Ok(())
         }
 
-        fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), asprof::AsProfError> {
+        fn start_async_profiler(
+            &self,
+            jfr_file_path: &Path,
+            _options: &ProfilerOptions,
+        ) -> Result<(), asprof::AsProfError> {
             let contents = format!(
                 "JFR{}",
                 self.counter.fetch_add(1, atomic::Ordering::Relaxed)
@@ -457,7 +578,11 @@ mod tests {
             Ok(())
         }
 
-        fn start_async_profiler(&self, jfr_file_path: &Path) -> Result<(), asprof::AsProfError> {
+        fn start_async_profiler(
+            &self,
+            jfr_file_path: &Path,
+            _options: &ProfilerOptions,
+        ) -> Result<(), asprof::AsProfError> {
             let jfr_file_path = jfr_file_path.to_owned();
             std::fs::write(&jfr_file_path, "JFR").unwrap();
             let counter = self.counter.clone();
@@ -498,5 +623,37 @@ mod tests {
             }
         }
         panic!("didn't read from file");
+    }
+
+    #[test]
+    fn test_profiler_options_to_args_string_default() {
+        let opts = ProfilerOptions::default();
+        let dummy_path = Path::new("/tmp/test.jfr");
+        let args = opts.to_args_string(dummy_path);
+        assert!(
+            args.contains("start,event=cpu,interval=100000000,wall=1000ms,jfr,cstack=dwarf"),
+            "Default args string not constructed correctly"
+        );
+        assert!(args.contains("file=/tmp/test.jfr"));
+        assert!(!args.contains("nativemem="));
+    }
+
+    #[test]
+    fn test_profiler_options_to_args_string_with_native_mem() {
+        let opts = ProfilerOptions {
+            native_mem: Some("10m".to_string()),
+        };
+        let dummy_path = Path::new("/tmp/test.jfr");
+        let args = opts.to_args_string(dummy_path);
+        assert!(args.contains("nativemem=10m"));
+    }
+
+    #[test]
+    fn test_profiler_options_builder() {
+        let opts = ProfilerOptionsBuilder::default()
+            .with_native_mem("5m".to_string())
+            .build();
+
+        assert_eq!(opts.native_mem, Some("5m".to_string()));
     }
 }

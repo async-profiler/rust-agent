@@ -9,9 +9,18 @@ set -exuo pipefail
 
 mkdir -p profiles
 rm -f profiles/*.jfr
+
 # Pass --worker-threads 16 to make the test much less flaky since there is always some worker thread running
-./simple --local profiles --duration 60s --reporting-interval 15s --worker-threads 16
+./simple --local profiles --duration 30s --reporting-interval 10s --worker-threads 16 --native-mem 4k
+
 for profile in profiles/*.jfr; do
+    # Basic event presence check
+    native_malloc_count=$(./pollcatch-decoder nativemem --type malloc "$profile" | wc -l)
+    if [ "$native_malloc_count" -lt 1 ]; then
+        echo "No native malloc events found in $profile"
+        exit 1
+    fi
+
     short_sleeps_100=$(./pollcatch-decoder longpolls --stack-depth=10 "$profile" 100us | ( grep -c short_sleep_2 || true ))
     short_sleeps_1000=$(./pollcatch-decoder longpolls --stack-depth=10 "$profile" 1000us | ( grep -c short_sleep_2 || true ))
     long_sleeps_100=$(./pollcatch-decoder longpolls --stack-depth=10 "$profile" 100us | ( grep -c accidentally_slow_2 || true ))
