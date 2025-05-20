@@ -71,7 +71,6 @@ impl JfrFile {
     }
 }
 
-
 /// Options for configuring the async-profiler behavior.
 /// Currently supports:
 /// - Native memory allocation tracking
@@ -105,7 +104,10 @@ pub struct ProfilerOptionsBuilder {
 }
 
 impl ProfilerOptionsBuilder {
-    /// If set
+    /// If set, the profiler will collect native memory allocations.
+    /// The value is the interval in bytes or in other units,
+    /// if followed by k (kilobytes), m (megabytes), or g (gigabytes).
+    /// For example: "10m" will track allocations every 10 megabytes.
     pub fn with_native_mem(mut self, native_mem_interval: String) -> Self {
         self.native_mem = Some(native_mem_interval);
         self
@@ -243,7 +245,11 @@ impl<E: ProfilerEngine> Drop for ProfilerState<E> {
 
 pub(crate) trait ProfilerEngine: Send + Sync + 'static {
     fn init_async_profiler() -> Result<(), asprof::AsProfError>;
-    fn start_async_profiler(&self, jfr_file_path: &Path, options: &ProfilerOptions) -> Result<(), asprof::AsProfError>;
+    fn start_async_profiler(
+        &self,
+        jfr_file_path: &Path,
+        options: &ProfilerOptions,
+    ) -> Result<(), asprof::AsProfError>;
     fn stop_async_profiler() -> Result<(), asprof::AsProfError>;
 }
 
@@ -432,7 +438,11 @@ mod tests {
             Ok(())
         }
 
-        fn start_async_profiler(&self, jfr_file_path: &Path, _options: &ProfilerOptions) -> Result<(), asprof::AsProfError> {
+        fn start_async_profiler(
+            &self,
+            jfr_file_path: &Path,
+            _options: &ProfilerOptions,
+        ) -> Result<(), asprof::AsProfError> {
             let contents = format!(
                 "JFR{}",
                 self.counter.fetch_add(1, atomic::Ordering::Relaxed)
@@ -516,7 +526,11 @@ mod tests {
             Ok(())
         }
 
-        fn start_async_profiler(&self, jfr_file_path: &Path, _options: &ProfilerOptions) -> Result<(), asprof::AsProfError> {
+        fn start_async_profiler(
+            &self,
+            jfr_file_path: &Path,
+            _options: &ProfilerOptions,
+        ) -> Result<(), asprof::AsProfError> {
             let jfr_file_path = jfr_file_path.to_owned();
             std::fs::write(&jfr_file_path, "JFR").unwrap();
             let counter = self.counter.clone();
@@ -560,7 +574,7 @@ mod tests {
     }
 
     #[test]
-        fn test_profiler_options_to_args_string_default() {
+    fn test_profiler_options_to_args_string_default() {
         let opts = ProfilerOptions::default();
         let dummy_path = Path::new("/tmp/test.jfr");
         let args = opts.to_args_string(dummy_path);

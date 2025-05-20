@@ -37,6 +37,20 @@ enum Commands {
         #[arg(long, default_value = "5")]
         stack_depth: usize,
     },
+    /// Print native memory events from a JFR file
+    Nativemem {
+        /// JFR file to read from
+        jfr_file: OsString,
+        /// If true, unzip first
+        #[arg(long)]
+        zip: bool,
+        /// Type of event to show (malloc or free)
+        #[arg(long, default_value = "malloc")]
+        type_: String,
+        /// Stack depth to show
+        #[arg(long, default_value = "5")]
+        stack_depth: usize,
+    },
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -83,6 +97,26 @@ fn main() -> anyhow::Result<()> {
                 }
             };
             print_samples(&mut io::stdout(), samples, stack_depth).ok();
+            Ok(())
+        }
+        Commands::Nativemem {
+            jfr_file,
+            type_,
+            zip,
+            stack_depth,
+        } => {
+            let mut jfr_file = std::fs::File::open(jfr_file)?;
+            let events = match zip {
+                false => jfr_native_mem_events(&mut jfr_file, &type_)?,
+                true => {
+                    if let Some(data) = extract_async_profiler_jfr_from_zip(jfr_file)? {
+                        jfr_native_mem_events(&mut Cursor::new(&data), &type_)?
+                    } else {
+                        anyhow::bail!("no async_profiler_dump_0.jfr file found");
+                    }
+                }
+            };
+            print_native_mem_events(&mut io::stdout(), events, &type_, stack_depth).ok();
             Ok(())
         }
     }
@@ -267,6 +301,21 @@ struct JfrTypeInfo {
 
     // java.lang.Thread
     os_thread_index: usize,
+
+    // profiler.Malloc
+    malloc: Option<i64>,
+    malloc_start_time_index: usize,
+    malloc_event_thread_index: usize,
+    malloc_stacktrace_index: usize,
+    malloc_address_index: usize,
+    malloc_size_index: usize,
+
+    // profiler.Free
+    free: Option<i64>,
+    free_start_time_index: usize,
+    free_event_thread_index: usize,
+    free_stacktrace_index: usize,
+    free_address_index: usize,
 }
 
 impl JfrTypeInfo {
@@ -290,6 +339,17 @@ impl JfrTypeInfo {
             user_event_data_index: !0,
             user_event_type_name: !0,
             os_thread_index: !0,
+            malloc: None,
+            malloc_start_time_index: !0,
+            malloc_event_thread_index: !0,
+            malloc_stacktrace_index: !0,
+            malloc_address_index: !0,
+            malloc_size_index: !0,
+            free: None,
+            free_start_time_index: !0,
+            free_event_thread_index: !0,
+            free_stacktrace_index: !0,
+            free_address_index: !0,
         }
     }
 
@@ -353,6 +413,31 @@ impl JfrTypeInfo {
                     match field.name() {
                         "name" => self.active_setting_name_index = i,
                         "value" => self.active_setting_value_index = i,
+                        _ => {}
+                    }
+                }
+            }
+            "profiler.Malloc" => {
+                self.malloc = Some(ty.class_id);
+                for (i, field) in ty.fields.iter().enumerate() {
+                    match field.name() {
+                        "startTime" => self.malloc_start_time_index = i,
+                        "eventThread" => self.malloc_event_thread_index = i,
+                        "stackTrace" => self.malloc_stacktrace_index = i,
+                        "address" => self.malloc_address_index = i,
+                        "size" => self.malloc_size_index = i,
+                        _ => {}
+                    }
+                }
+            }
+            "profiler.Free" => {
+                self.free = Some(ty.class_id);
+                for (i, field) in ty.fields.iter().enumerate() {
+                    match field.name() {
+                        "startTime" => self.free_start_time_index = i,
+                        "eventThread" => self.free_event_thread_index = i,
+                        "stackTrace" => self.free_stacktrace_index = i,
+                        "address" => self.free_address_index = i,
                         _ => {}
                     }
                 }
@@ -547,9 +632,136 @@ where
     Ok(samples)
 }
 
+#[derive(Debug)]
+struct NativeMemEvent {
+    start_time: Duration,
+    thread_id: i64,
+    address: u64,
+    size: Option<u64>,
+    frames: Vec<StackFrame>,
+}
+
+fn process_native_mem_event(
+    chunk: &Chunk,
+    tys: &JfrTypeInfo,
+    event: jfrs::reader::event::Event<'_>,
+    event_type: &str,
+) -> Option<NativeMemEvent> {
+    let event = as_object(event.value().value)?;
+    let (class_id, start_time_idx, thread_idx, stacktrace_idx, address_idx, size_idx) = match event_type {
+        "malloc" => (
+            tys.malloc?,
+            tys.malloc_start_time_index,
+            tys.malloc_event_thread_index,
+            tys.malloc_stacktrace_index,
+            tys.malloc_address_index,
+            Some(tys.malloc_size_index),
+        ),
+        "free" => (
+            tys.free?,
+            tys.free_start_time_index,
+            tys.free_event_thread_index,
+            tys.free_stacktrace_index,
+            tys.free_address_index,
+            None,
+        ),
+        _ => return None,
+    };
+
+    if event.class_id != class_id {
+        return None;
+    }
+
+    let start_time_ticks = event.fields.get(start_time_idx).and_then(as_long)?;
+    let thread_id = resolve_field(chunk, event, thread_idx)
+        .and_then(as_object)?
+        .fields
+        .get(tys.os_thread_index)
+        .and_then(as_long)?;
+    let address = event.fields.get(address_idx).and_then(as_long)? as u64;
+    let size = size_idx.and_then(|idx| event.fields.get(idx).and_then(as_long).map(|x| x as u64));
+    let stacktrace = event.fields.get(stacktrace_idx)?;
+
+    Some(NativeMemEvent {
+        start_time: Duration::from_nanos(
+            ((start_time_ticks as u128) * 1_000_000_000 / (chunk.header.ticks_per_second as u128)) as u64,
+        ),
+        thread_id,
+        address,
+        size,
+        frames: resolve_stack_trace(Accessor::new(chunk, stacktrace)),
+    })
+}
+
+fn jfr_native_mem_events<T>(
+    reader: &mut T,
+    event_type: &str,
+) -> anyhow::Result<Vec<NativeMemEvent>>
+where
+    T: Read + Seek,
+{
+    let mut jfr_reader = JfrReader::new(reader);
+    let mut events = vec![];
+    let mut tys = JfrTypeInfo::new();
+
+    for chunk in jfr_reader.chunks() {
+        let (mut c_rdr, c) = chunk?;
+        for ty in c.metadata.type_pool.get_types() {
+            tys.load_type_descriptor(ty);
+        }
+
+        for event in c_rdr.events_from_offset(&c, 0) {
+            let event: jfrs::reader::event::Event<'_> = event?;
+            if let Some(event) = process_native_mem_event(&c, &tys, event, event_type) {
+                events.push(event);
+            }
+        }
+    }
+    Ok(events)
+}
+
+fn print_native_mem_events<F: Write>(
+    to: &mut F,
+    events: Vec<NativeMemEvent>,
+    type_: &str,
+    stack_depth: usize,
+) -> io::Result<()> {
+    for event in events {
+        writeln!(
+            to,
+            "[{:.6}] thread {} - {} at {:#x}{}",
+            event.start_time.as_secs_f64(),
+            event.thread_id,
+            type_,
+            event.address,
+            event.size.map_or("".to_string(), |s| format!(" ({} bytes)", s))
+        )?;
+        for (i, frame) in event.frames.iter().enumerate() {
+            if i == stack_depth {
+                writeln!(
+                    to,
+                    " - {:3} more frame(s) (pass --stack-depth={} to show)",
+                    event.frames.len() - stack_depth,
+                    event.frames.len()
+                )?;
+                break;
+            }
+            writeln!(
+                to,
+                " - {:3}: {}.{}",
+                i + 1,
+                frame.class_name.as_deref().unwrap_or("<unknown>"),
+                frame.name.as_deref().unwrap_or("<unknown>")
+            )?;
+        }
+        writeln!(to)?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
-    use super::{jfr_samples, print_samples, Sample, StackFrame};
+    use super::{jfr_samples, print_samples, Sample, StackFrame, NativeMemEvent, print_native_mem_events};
     use std::io;
     use std::time::Duration;
 
@@ -631,6 +843,39 @@ mod test {
  -   3: simple.std::thread::sleep
  -   4: simple.simple::slow::short_sleep
  -  55 more frame(s) (pass --stack-depth=59 to show)
+
+"#
+        );
+    }
+
+    #[test]
+    fn test_print_native_mem_events() {
+        let mut to = vec![];
+        let events = vec![
+            NativeMemEvent {
+                start_time: Duration::from_secs(1),
+                thread_id: 1,
+                address: 0x1234,
+                size: Some(1024),
+                frames: vec![
+                    StackFrame {
+                        class_name: None,
+                        name: None,
+                    },
+                    StackFrame {
+                        class_name: Some("std".into()),
+                        name: Some("alloc".into()),
+                    },
+                ],
+            },
+        ];
+
+        print_native_mem_events(&mut to, events, "malloc", 1).unwrap();
+        assert_eq!(
+            String::from_utf8(to).unwrap(),
+            r#"[1.000000] thread 1 - malloc at 0x1234 (1024 bytes)
+ -   1: <unknown>.<unknown>
+ -   1 more frame(s) (pass --stack-depth=2 to show)
 
 "#
         );
