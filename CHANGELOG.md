@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.6](https://github.com/async-profiler/rust-agent/compare/v0.1.5...v0.1.6) - 2025-05-20
+
+### Added
+
+- support not enabling default features for AWS and Reqwest (`aws-metadata-no-defaults`, `s3-no-defaults`)
+
 ## [0.1.5](https://github.com/async-profiler/rust-agent/compare/v0.1.4...v0.1.5) - 2025-05-20
 
 ### Added
