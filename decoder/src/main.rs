@@ -763,7 +763,8 @@ fn print_native_mem_events<F: Write>(
 #[cfg(test)]
 mod test {
     use super::{
-        jfr_samples, print_native_mem_events, print_samples, NativeMemEvent, Sample, StackFrame,
+        jfr_native_mem_events, jfr_samples, print_native_mem_events, print_samples, NativeMemEvent,
+        Sample, StackFrame,
     };
     use std::io;
     use std::time::Duration;
@@ -877,6 +878,30 @@ mod test {
             r#"[1.000000] thread 1 - malloc at 0x1234 (1024 bytes)
  -   1: <unknown>.<unknown>
  -   1 more frame(s) (pass --stack-depth=2 to show)
+
+"#
+        );
+    }
+
+    #[test]
+    fn test_jfr_samples_nativemem() {
+        let jfr = include_bytes!("../../tests/test-nativemem.jfr");
+        let events = jfr_native_mem_events(&mut io::Cursor::new(jfr), "malloc").unwrap();
+        let mut to = vec![];
+        print_native_mem_events(&mut to, events, "malloc", 1).unwrap();
+        assert_eq!(
+            String::from_utf8(to).unwrap(),
+            r#"[197.928096] thread 2082 - malloc at 0x7ffb08000cd0 (58782 bytes)
+ -   1: libasyncProfiler.so.malloc_hook
+ -  32 more frame(s) (pass --stack-depth=33 to show)
+
+[197.927903] thread 2080 - malloc at 0x7ffb04000ba0 (32816 bytes)
+ -   1: libasyncProfiler.so.malloc_hook
+ -   6 more frame(s) (pass --stack-depth=7 to show)
+
+[197.928316] thread 2067 - malloc at 0x7ffb40019b00 (256 bytes)
+ -   1: libasyncProfiler.so.posix_memalign_hook
+ -  73 more frame(s) (pass --stack-depth=74 to show)
 
 "#
         );

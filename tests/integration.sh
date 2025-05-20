@@ -11,7 +11,7 @@ mkdir -p profiles
 rm -f profiles/*.jfr
 
 # Pass --worker-threads 16 to make the test much less flaky since there is always some worker thread running
-./simple --local profiles --duration 30s --reporting-interval 10s --worker-threads 16 --native-mem 0
+./simple --local profiles --duration 30s --reporting-interval 10s --worker-threads 16 --native-mem 4k
 
 for profile in profiles/*.jfr; do
     # Basic event presence check
