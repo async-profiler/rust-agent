@@ -29,8 +29,18 @@ pub fn set_up_tracing() {
         .init();
 }
 
+#[derive(Clone, Debug, Default, Parser)]
+struct S3BucketArgs {
+    #[arg(long, requires = "bucket_owner", requires = "profiling_group")]
+    bucket: Option<String>,
+    #[arg(long)]
+    bucket_owner: Option<String>,
+    #[arg(long)]
+    profiling_group: Option<String>,
+}
+
 /// Simple program to test the profiler agent
-#[derive(Parser, Debug)]
+#[derive(Debug, Parser)]
 #[command(group(
     ArgGroup::new("options")
         .required(true)
@@ -38,14 +48,8 @@ pub fn set_up_tracing() {
 ))]
 struct Args {
     #[cfg(feature = "s3-no-defaults")]
-    #[arg(long)]
-    profiling_group: Option<String>,
-    #[cfg(feature = "s3-no-defaults")]
-    #[arg(long)]
-    bucket_owner: Option<String>,
-    #[cfg(feature = "s3-no-defaults")]
-    #[arg(long, requires = "bucket_owner", requires = "profiling_group")]
-    bucket: Option<String>,
+    #[command(flatten)]
+    bucket_args: S3BucketArgs,
     #[arg(long)]
     local: Option<String>,
     #[arg(long)]
@@ -58,6 +62,18 @@ struct Args {
     worker_threads: Option<usize>,
     #[arg(long)]
     native_mem: Option<String>,
+}
+
+impl Args {
+    #[cfg(feature = "s3-no-defaults")]
+    fn s3_bucket_args(&self) -> S3BucketArgs {
+        self.bucket_args.clone()
+    }
+
+    #[cfg(not(feature = "s3-no-defaults"))]
+    fn s3_bucket_args(&self) -> S3BucketArgs {
+        S3BucketArgs::default()
+    }
 }
 
 #[allow(unexpected_cfgs)]
@@ -85,31 +101,24 @@ async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
 
     let profiler = ProfilerBuilder::default();
 
-    #[cfg(feature = "s3-no-defaults")]
-    let bucket_name = args.bucket;
-    #[cfg(not(feature = "s3-no-defaults"))]
-    let bucket_name: Option<String> = None;
-    #[cfg(feature = "s3-no-defaults")]
-    let bucket_owner = args.bucket_owner;
-    #[cfg(not(feature = "s3-no-defaults"))]
-    let bucket_owner: Option<String> = None;
-    #[cfg(feature = "s3-no-defaults")]
-    let profiling_group_name = args.profiling_group;
-    #[cfg(not(feature = "s3-no-defaults"))]
-    let profiling_group_name: Option<String> = None;
-
-    let profiler = match (args.local, bucket_name, bucket_owner, profiling_group_name) {
-        (Some(local), _, _, _) => profiler
+    let profiler = match (&args.local, args.s3_bucket_args()) {
+        (Some(local), S3BucketArgs { .. }) => profiler
             .with_reporter(LocalReporter::new(local))
             .with_custom_agent_metadata(AgentMetadata::Other),
         #[cfg(feature = "s3-no-defaults")]
-        (_, Some(bucket_name), Some(bucket_owner), Some(profiling_group_name)) => profiler
-            .with_reporter(S3Reporter::new(S3ReporterConfig {
-                sdk_config: &aws_config::defaults(BehaviorVersion::latest()).load().await,
-                bucket_owner,
-                bucket_name,
-                profiling_group_name,
-            })),
+        (
+            _,
+            S3BucketArgs {
+                bucket: Some(bucket_name),
+                bucket_owner: Some(bucket_owner),
+                profiling_group: Some(profiling_group_name),
+            },
+        ) => profiler.with_reporter(S3Reporter::new(S3ReporterConfig {
+            sdk_config: &aws_config::defaults(BehaviorVersion::latest()).load().await,
+            bucket_owner,
+            bucket_name,
+            profiling_group_name,
+        })),
         _ => unreachable!(),
     };
 

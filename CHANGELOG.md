@@ -10,7 +10,6 @@ All notable changes to this project will be documented in this file.
 
 - add support for stopping the profiler
 - make native memory profiling interval configurable
-- add Cargo features to allow not enabling AWS/reqwest default features
 
 ### Other
 
