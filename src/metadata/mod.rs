@@ -60,7 +60,7 @@ pub struct ReportMetadata<'a> {
     pub reporting_interval: Duration,
 }
 
-#[cfg(feature = "aws-metadata")]
+#[cfg(feature = "aws-metadata-no-defaults")]
 pub mod aws;
 
 /// [private] dummy metadata to make testing easier

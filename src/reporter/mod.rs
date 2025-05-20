@@ -16,7 +16,7 @@ use crate::metadata::ReportMetadata;
 
 pub mod local;
 pub mod multi;
-#[cfg(feature = "s3")]
+#[cfg(feature = "s3-no-defaults")]
 pub mod s3;
 
 /// Abstraction around reporting profiler data.

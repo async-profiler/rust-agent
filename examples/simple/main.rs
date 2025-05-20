@@ -1,16 +1,16 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(feature = "s3-no-defaults")]
+use async_profiler_agent::reporter::s3::{S3Reporter, S3ReporterConfig};
 use async_profiler_agent::{
     metadata::AgentMetadata,
     profiler::{ProfilerBuilder, ProfilerOptionsBuilder},
-    reporter::{
-        local::LocalReporter,
-        s3::{S3Reporter, S3ReporterConfig},
-    },
+    reporter::local::LocalReporter,
 };
 use std::time::Duration;
 
+#[cfg(feature = "s3-no-defaults")]
 use aws_config::BehaviorVersion;
 use clap::{ArgGroup, Parser};
 
@@ -37,10 +37,13 @@ pub fn set_up_tracing() {
         .args(["local", "bucket"]),
 ))]
 struct Args {
+    #[cfg(feature = "s3-no-defaults")]
     #[arg(long)]
     profiling_group: Option<String>,
+    #[cfg(feature = "s3-no-defaults")]
     #[arg(long)]
     bucket_owner: Option<String>,
+    #[cfg(feature = "s3-no-defaults")]
     #[arg(long, requires = "bucket_owner", requires = "profiling_group")]
     bucket: Option<String>,
     #[arg(long)]
@@ -82,23 +85,31 @@ async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
 
     let profiler = ProfilerBuilder::default();
 
-    let profiler = match (
-        args.local,
-        args.bucket,
-        args.bucket_owner,
-        args.profiling_group,
-    ) {
+    #[cfg(feature = "s3-no-defaults")]
+    let bucket_name = args.bucket;
+    #[cfg(not(feature = "s3-no-defaults"))]
+    let bucket_name: Option<String> = None;
+    #[cfg(feature = "s3-no-defaults")]
+    let bucket_owner = args.bucket_owner;
+    #[cfg(not(feature = "s3-no-defaults"))]
+    let bucket_owner: Option<String> = None;
+    #[cfg(feature = "s3-no-defaults")]
+    let profiling_group_name = args.profiling_group;
+    #[cfg(not(feature = "s3-no-defaults"))]
+    let profiling_group_name: Option<String> = None;
+
+    let profiler = match (args.local, bucket_name, bucket_owner, profiling_group_name) {
         (Some(local), _, _, _) => profiler
             .with_reporter(LocalReporter::new(local))
             .with_custom_agent_metadata(AgentMetadata::Other),
-        (_, Some(bucket), Some(bucket_owner), Some(profiling_group)) => {
-            profiler.with_reporter(S3Reporter::new(S3ReporterConfig {
+        #[cfg(feature = "s3-no-defaults")]
+        (_, Some(bucket_name), Some(bucket_owner), Some(profiling_group_name)) => profiler
+            .with_reporter(S3Reporter::new(S3ReporterConfig {
                 sdk_config: &aws_config::defaults(BehaviorVersion::latest()).load().await,
-                bucket_owner: bucket_owner,
-                bucket_name: bucket,
-                profiling_group_name: profiling_group,
-            }))
-        }
+                bucket_owner,
+                bucket_name,
+                profiling_group_name,
+            })),
         _ => unreachable!(),
     };
 

@@ -5,7 +5,7 @@
 
 use crate::{
     asprof::{self, AsProfError},
-    metadata::{aws::AwsProfilerMetadataError, AgentMetadata, ReportMetadata},
+    metadata::{AgentMetadata, ReportMetadata},
     reporter::Reporter,
 };
 use std::{
@@ -311,7 +311,8 @@ enum TickError {
     #[error(transparent)]
     AsProf(#[from] AsProfError),
     #[error(transparent)]
-    Metadata(#[from] AwsProfilerMetadataError),
+    #[cfg(feature = "aws-metadata-no-defaults")]
+    Metadata(#[from] crate::metadata::aws::AwsProfilerMetadataError),
     #[error("reporter: {0}")]
     Reporter(Box<dyn std::error::Error + Send>),
     #[error("broken clock: {0}")]

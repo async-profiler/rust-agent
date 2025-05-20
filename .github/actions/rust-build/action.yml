@@ -20,7 +20,8 @@ runs:
           if [ "${{ inputs.toolchain }}" != stable ]; then
               rm -fv Cargo.lock
           fi
-          cargo build --all-features --verbose
+          cargo build --verbose ${{ inputs.flags }}
     - name: Run tests
       shell: bash
-      run: cargo test --all-features --verbose
+      run: |
+          cargo test --verbose ${{ inputs.flags }}
