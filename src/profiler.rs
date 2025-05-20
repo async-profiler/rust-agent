@@ -76,10 +76,18 @@ impl JfrFile {
 /// - Native memory allocation tracking
 #[derive(Debug, Default)]
 pub struct ProfilerOptions {
-    /// If set, the profiler will collect native memory allocations.
+    /// If set, the profiler will collect information about
+    /// native memory allocations.
+    ///
     /// The value is the interval in bytes or in other units,
     /// if followed by k (kilobytes), m (megabytes), or g (gigabytes).
-    /// For example: "10m" will track allocations every 10 megabytes.
+    /// For example, `"10m"` will sample an allocation for every
+    /// 10 megabytes of memory allocated. Passing `"0"` will sample
+    /// all allocations.
+    ///
+    /// See [ProfilingModes in the async-profiler docs] for more details.
+    ///
+    /// [ProfilingModes in the async-profiler docs]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilingModes.md#native-memory-leaks
     pub native_mem: Option<String>,
 }
 
@@ -104,10 +112,54 @@ pub struct ProfilerOptionsBuilder {
 }
 
 impl ProfilerOptionsBuilder {
-    /// If set, the profiler will collect native memory allocations.
+    /// If set, the profiler will collect information about
+    /// native memory allocations.
+    ///
     /// The value is the interval in bytes or in other units,
     /// if followed by k (kilobytes), m (megabytes), or g (gigabytes).
-    /// For example: "10m" will track allocations every 10 megabytes.
+    ///
+    /// See [ProfilingModes in the async-profiler docs] for more details.
+    ///
+    /// [ProfilingModes in the async-profiler docs]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilingModes.md#native-memory-leaks
+    ///
+    /// ### Examples
+    ///
+    /// This will sample allocations for every 10 megabytes allocated:
+    ///
+    /// ```
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # fn main() -> Result<(), SpawnError> {
+    /// let opts = ProfilerOptionsBuilder::default().with_native_mem("10m".into()).build();
+    /// let profiler = ProfilerBuilder::default()
+    ///     .with_profiler_options(opts)
+    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .build();
+    /// # if false { // don't spawn the profiler in doctests
+    /// profiler.spawn()?;
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// This will sample every allocation (potentially slow):
+    /// ```
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # fn main() -> Result<(), SpawnError> {
+    /// let opts = ProfilerOptionsBuilder::default().with_native_mem("0".into()).build();
+    /// let profiler = ProfilerBuilder::default()
+    ///     .with_profiler_options(opts)
+    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .build();
+    /// # if false { // don't spawn the profiler in doctests
+    /// profiler.spawn()?;
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn with_native_mem(mut self, native_mem_interval: String) -> Self {
         self.native_mem = Some(native_mem_interval);
         self

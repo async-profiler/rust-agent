@@ -648,25 +648,26 @@ fn process_native_mem_event(
     event_type: &str,
 ) -> Option<NativeMemEvent> {
     let event = as_object(event.value().value)?;
-    let (class_id, start_time_idx, thread_idx, stacktrace_idx, address_idx, size_idx) = match event_type {
-        "malloc" => (
-            tys.malloc?,
-            tys.malloc_start_time_index,
-            tys.malloc_event_thread_index,
-            tys.malloc_stacktrace_index,
-            tys.malloc_address_index,
-            Some(tys.malloc_size_index),
-        ),
-        "free" => (
-            tys.free?,
-            tys.free_start_time_index,
-            tys.free_event_thread_index,
-            tys.free_stacktrace_index,
-            tys.free_address_index,
-            None,
-        ),
-        _ => return None,
-    };
+    let (class_id, start_time_idx, thread_idx, stacktrace_idx, address_idx, size_idx) =
+        match event_type {
+            "malloc" => (
+                tys.malloc?,
+                tys.malloc_start_time_index,
+                tys.malloc_event_thread_index,
+                tys.malloc_stacktrace_index,
+                tys.malloc_address_index,
+                Some(tys.malloc_size_index),
+            ),
+            "free" => (
+                tys.free?,
+                tys.free_start_time_index,
+                tys.free_event_thread_index,
+                tys.free_stacktrace_index,
+                tys.free_address_index,
+                None,
+            ),
+            _ => return None,
+        };
 
     if event.class_id != class_id {
         return None;
@@ -684,7 +685,8 @@ fn process_native_mem_event(
 
     Some(NativeMemEvent {
         start_time: Duration::from_nanos(
-            ((start_time_ticks as u128) * 1_000_000_000 / (chunk.header.ticks_per_second as u128)) as u64,
+            ((start_time_ticks as u128) * 1_000_000_000 / (chunk.header.ticks_per_second as u128))
+                as u64,
         ),
         thread_id,
         address,
@@ -693,10 +695,7 @@ fn process_native_mem_event(
     })
 }
 
-fn jfr_native_mem_events<T>(
-    reader: &mut T,
-    event_type: &str,
-) -> anyhow::Result<Vec<NativeMemEvent>>
+fn jfr_native_mem_events<T>(reader: &mut T, event_type: &str) -> anyhow::Result<Vec<NativeMemEvent>>
 where
     T: Read + Seek,
 {
@@ -734,7 +733,9 @@ fn print_native_mem_events<F: Write>(
             event.thread_id,
             type_,
             event.address,
-            event.size.map_or("".to_string(), |s| format!(" ({} bytes)", s))
+            event
+                .size
+                .map_or("".to_string(), |s| format!(" ({} bytes)", s))
         )?;
         for (i, frame) in event.frames.iter().enumerate() {
             if i == stack_depth {
@@ -761,7 +762,9 @@ fn print_native_mem_events<F: Write>(
 
 #[cfg(test)]
 mod test {
-    use super::{jfr_samples, print_samples, Sample, StackFrame, NativeMemEvent, print_native_mem_events};
+    use super::{
+        jfr_samples, print_native_mem_events, print_samples, NativeMemEvent, Sample, StackFrame,
+    };
     use std::io;
     use std::time::Duration;
 
@@ -851,24 +854,22 @@ mod test {
     #[test]
     fn test_print_native_mem_events() {
         let mut to = vec![];
-        let events = vec![
-            NativeMemEvent {
-                start_time: Duration::from_secs(1),
-                thread_id: 1,
-                address: 0x1234,
-                size: Some(1024),
-                frames: vec![
-                    StackFrame {
-                        class_name: None,
-                        name: None,
-                    },
-                    StackFrame {
-                        class_name: Some("std".into()),
-                        name: Some("alloc".into()),
-                    },
-                ],
-            },
-        ];
+        let events = vec![NativeMemEvent {
+            start_time: Duration::from_secs(1),
+            thread_id: 1,
+            address: 0x1234,
+            size: Some(1024),
+            frames: vec![
+                StackFrame {
+                    class_name: None,
+                    name: None,
+                },
+                StackFrame {
+                    class_name: Some("std".into()),
+                    name: Some("alloc".into()),
+                },
+            ],
+        }];
 
         print_native_mem_events(&mut to, events, "malloc", 1).unwrap();
         assert_eq!(
