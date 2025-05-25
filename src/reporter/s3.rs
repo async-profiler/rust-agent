@@ -109,7 +109,11 @@ impl S3Reporter {
             &self.s3_client,
             self.bucket_owner.clone(),
             self.bucket_name.clone(),
-            make_s3_file_name(metadata_obj.instance, &self.profiling_group_name),
+            make_s3_file_name(
+                metadata_obj.instance,
+                &self.profiling_group_name,
+                SystemTime::now(),
+            ),
             zip,
         )
         .await?;
@@ -118,7 +122,11 @@ impl S3Reporter {
     }
 }
 
-fn make_s3_file_name(metadata_obj: &AgentMetadata, profiling_group_name: &str) -> String {
+fn make_s3_file_name(
+    metadata_obj: &AgentMetadata,
+    profiling_group_name: &str,
+    time: SystemTime,
+) -> String {
     let machine = match metadata_obj {
         AgentMetadata::Ec2AgentMetadata {
             aws_account_id: _,
@@ -132,15 +140,14 @@ fn make_s3_file_name(metadata_obj: &AgentMetadata, profiling_group_name: &str) -
             aws_account_id: _,
             aws_region_id: _,
             ecs_task_arn,
-            ecs_cluster_arn,
+            ecs_cluster_arn: _,
         } => {
             let task_arn = ecs_task_arn.replace("/", "-").replace("_", "-");
-            let cluster_arn = ecs_cluster_arn.replace("/", "-").replace("_", "-");
-            format!("ecs_{cluster_arn}_{task_arn}")
+            format!("ecs_{task_arn}_")
         }
         AgentMetadata::Other => "onprem__".to_string(),
     };
-    let time: chrono::DateTime<chrono::Utc> = SystemTime::now().into();
+    let time: chrono::DateTime<chrono::Utc> = time.into();
     let time = time
         .to_rfc3339_opts(SecondsFormat::Secs, true)
         .replace(":", "-");
@@ -215,4 +222,104 @@ async fn send_profile_data(
         .await
         .map_err(|x| S3ReporterError::SendProfileS3Data(Box::new(x.into())))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use std::{
+        io,
+        sync::{Arc, Mutex},
+        time::SystemTime,
+    };
+
+    use aws_sdk_s3::operation::put_object::PutObjectOutput;
+    use aws_smithy_mocks::{mock, mock_client};
+
+    use test_case::test_case;
+
+    use crate::{
+        metadata::{AgentMetadata, DUMMY_METADATA},
+        reporter::s3::S3Reporter,
+    };
+
+    fn assert_zip(zip_file: Vec<u8>) {
+        let zip = zip::ZipArchive::new(io::Cursor::new(&zip_file)).unwrap();
+        let mut file_names: Vec<_> = zip.file_names().collect();
+        file_names.sort();
+        assert_eq!(
+            file_names,
+            vec!["async_profiler_dump_0.jfr", "metadata.json"]
+        );
+    }
+
+    #[test_case(AgentMetadata::Other, "profile_pg_onprem___<pid>_<time>.zip"; "other")]
+    #[test_case(AgentMetadata::Ec2AgentMetadata {
+        aws_account_id: "1".into(),
+        aws_region_id: "us-east-1".into(),
+        ec2_instance_id: "i-0".into()
+    }, "profile_pg_ec2_i-0__<pid>_<time>.zip"; "ec2")]
+    #[test_case(AgentMetadata::FargateAgentMetadata {
+        aws_account_id: "1".into(),
+        aws_region_id: "us-east-1".into(),
+        ecs_task_arn: "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f".into(),
+        ecs_cluster_arn: "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster".into()
+    }, "profile_pg_ecs_arn:aws:ecs:us-east-1:123456789012:task-profiler-metadata-cluster-5261e761e0e2a3d92da3f02c8e5bab1f__<pid>_<time>.zip"; "ecs")]
+    fn test_make_s3_file_name(metadata: AgentMetadata, expected: &str) {
+        let file_name = super::make_s3_file_name(&metadata, "pg", SystemTime::UNIX_EPOCH);
+        assert_eq!(
+            file_name,
+            expected
+                .replace("<pid>", &std::process::id().to_string())
+                .replace("<time>", "1970-01-01T00-00-00Z")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_reporter() {
+        let uploaded_file = Arc::new(Mutex::new(None));
+        let uploaded_file_ = uploaded_file.clone();
+        let put_object_rule = mock!(aws_sdk_s3::Client::put_object)
+            .match_requests(move |req| {
+                *uploaded_file_.lock().unwrap() = Some(req.body().bytes().unwrap().to_vec());
+                true
+            })
+            .then_output(|| PutObjectOutput::builder().build());
+
+        // Create a mocked client with the rule
+        // Use the standard Builder instead of with_test_defaults
+        let reporter = S3Reporter {
+            s3_client: mock_client!(aws_sdk_s3, [&put_object_rule]),
+            bucket_owner: "123456789012".into(),
+            bucket_name: "123456789012-bucket".into(),
+            profiling_group_name: "test-profiling-group".into(),
+        };
+        reporter
+            .report_profiling_data(b"JFR".into(), &DUMMY_METADATA)
+            .await
+            .unwrap();
+        assert_zip(uploaded_file.lock().unwrap().take().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_reporter_error() {
+        let put_object_rule = mock!(aws_sdk_s3::Client::put_object).then_error(|| {
+            aws_sdk_s3::operation::put_object::PutObjectError::unhandled(io::Error::new(
+                io::ErrorKind::Other,
+                "oh no",
+            ))
+        });
+
+        // Create a mocked client with the rule
+        // Use the standard Builder instead of with_test_defaults
+        let reporter = S3Reporter {
+            s3_client: mock_client!(aws_sdk_s3, [&put_object_rule]),
+            bucket_owner: "123456789012".into(),
+            bucket_name: "123456789012-bucket".into(),
+            profiling_group_name: "test-profiling-group".into(),
+        };
+        reporter
+            .report_profiling_data(b"JFR".into(), &DUMMY_METADATA)
+            .await
+            .unwrap_err();
+    }
 }
