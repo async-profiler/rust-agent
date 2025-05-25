@@ -26,6 +26,8 @@ tracing = "0.1"
 zip = { version = "3", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
+aws-smithy-mocks = "0.1"
+aws-sdk-s3 = { version = "1", features = ["test-util"] }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
