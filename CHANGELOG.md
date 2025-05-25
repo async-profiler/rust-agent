@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.7](https://github.com/async-profiler/rust-agent/compare/v0.1.6...v0.1.7) - 2025-05-25
+
+### Fixed
+
+- load agent metadata even for aws-metadata-no-defaults
+
+### Other
+
+- changed the name format of the .zip files uploaded to S3 when using the Fargate integration
+  to have less duplication
+
 ## [0.1.6](https://github.com/async-profiler/rust-agent/compare/v0.1.5...v0.1.6) - 2025-05-20
 
 ### Added
