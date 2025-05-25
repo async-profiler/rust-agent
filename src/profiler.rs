@@ -587,9 +587,9 @@ async fn profiler_tick<E: ProfilerEngine>(
     // the constructor. See the struct comments for why this is.
     // This code runs at most once.
     if agent_metadata.is_none() {
-        #[cfg(feature = "aws-metadata")]
+        #[cfg(feature = "aws-metadata-no-defaults")]
         let md = crate::metadata::aws::load_agent_metadata().await?;
-        #[cfg(not(feature = "aws-metadata"))]
+        #[cfg(not(feature = "aws-metadata-no-defaults"))]
         let md = crate::metadata::AgentMetadata::Other;
         tracing::debug!("loaded metadata");
         agent_metadata.replace(md);
