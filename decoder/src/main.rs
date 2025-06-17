@@ -33,9 +33,12 @@ enum Commands {
         zip: bool,
         /// Poll duration to mark from
         #[clap(value_parser = humantime::parse_duration)]
-        min_length: Duration,
+        min_length: Option<Duration>,
         #[arg(long, default_value = "5")]
         stack_depth: usize,
+        /// Include samples with no pollcatch information
+        #[arg(long)]
+        include_non_pollcatch: bool,
     },
     /// Print native memory events from a JFR file
     Nativemem {
@@ -84,13 +87,18 @@ fn main() -> anyhow::Result<()> {
             min_length,
             stack_depth,
             zip,
+            include_non_pollcatch,
         } => {
             let mut jfr_file = std::fs::File::open(jfr_file)?;
+            let config = LongPollConfig {
+                min_length,
+                include_non_pollcatch,
+            };
             let samples = match zip {
-                false => jfr_samples(&mut jfr_file, min_length)?,
+                false => jfr_samples(&mut jfr_file, &config)?,
                 true => {
                     if let Some(data) = extract_async_profiler_jfr_from_zip(jfr_file)? {
-                        jfr_samples(&mut Cursor::new(&data), min_length)?
+                        jfr_samples(&mut Cursor::new(&data), &config)?
                     } else {
                         anyhow::bail!("no async_profiler_dump_0.jfr file found");
                     }
@@ -146,10 +154,13 @@ fn print_samples<F: Write>(to: &mut F, samples: Vec<Sample>, stack_depth: usize)
         }
         writeln!(
             to,
-            "[{:.6}] thread {} - poll of {}us",
+            "[{:.6}] thread {} - {}",
             sample.start_time.as_secs_f64(),
             sample.thread_id,
-            sample.delta_t.as_micros()
+            match sample.delta_t {
+                Some(delta_t) => format!("poll of {}us", delta_t.as_micros()),
+                None => "sample with no pollcatch information".to_string(),
+            }
         )?;
         for (i, frame) in sample.frames.iter().enumerate() {
             if i == stack_depth {
@@ -176,7 +187,7 @@ fn print_samples<F: Write>(to: &mut F, samples: Vec<Sample>, stack_depth: usize)
 
 #[derive(Debug)]
 struct Sample {
-    delta_t: Duration,
+    delta_t: Option<Duration>,
     start_time: Duration,
     thread_id: i64,
     frames: Vec<StackFrame>,
@@ -234,6 +245,17 @@ fn find_delta_t_from_clock(pr_map: &[PollEventKey], tid: i64, clock_start: i64) 
     }
 }
 
+struct LongPollConfig {
+    pub min_length: Option<Duration>,
+    pub include_non_pollcatch: bool,
+}
+
+impl LongPollConfig {
+    fn long_poll_threshold(&self) -> u128 {
+        self.min_length.map_or(0, |d| d.as_micros())
+    }
+}
+
 fn process_sample(
     chunk: &Chunk,
     tys: &JfrTypeInfo,
@@ -241,32 +263,38 @@ fn process_sample(
     sampled_thread: Option<&ValueDescriptor>,
     stacktrace: Option<&ValueDescriptor>,
     start_time_ticks: i64,
-    long_poll_duration: u128,
+    config: &LongPollConfig,
 ) -> Option<Sample> {
-    let mut delta_t = 0;
+    let mut delta_t = None;
     let mut thread_id = !0;
     if let Some(ValueDescriptor::Object(st)) = sampled_thread {
         if let Some(tid) = st.fields.get(tys.os_thread_index).and_then(as_long) {
             thread_id = tid;
         }
     }
-    if delta_t == 0 {
-        if let Some(delta_t_) = find_delta_t_from_clock(pr_map, thread_id, start_time_ticks) {
-            delta_t = delta_t_;
-        }
+    if delta_t.is_none() {
+        delta_t = find_delta_t_from_clock(pr_map, thread_id, start_time_ticks);
     }
 
-    let delta_t_micros = (delta_t as u128) * 1000000 / (chunk.header.ticks_per_second as u128);
-    if delta_t_micros < long_poll_duration {
-        return None;
-    }
+    let delta_t = if let Some(delta_t) = delta_t {
+        let delta_t_micros = (delta_t as u128) * 1000000 / (chunk.header.ticks_per_second as u128);
+        if delta_t_micros < config.long_poll_threshold() {
+            return None;
+        }
+        Some(Duration::from_micros(delta_t_micros as u64))
+    } else {
+        if !config.include_non_pollcatch {
+            return None;
+        }
+        None
+    };
     stacktrace.map(|trace| Sample {
         thread_id,
         start_time: Duration::from_nanos(
             ((start_time_ticks as u128) * 1_000_000_000 / (chunk.header.ticks_per_second as u128))
                 as u64,
         ),
-        delta_t: Duration::from_micros(delta_t_micros as u64),
+        delta_t,
         frames: resolve_stack_trace(Accessor::new(chunk, trace)),
     })
 }
@@ -533,12 +561,11 @@ fn poll_event_from_user_event(
     }
 }
 
-fn jfr_samples<T>(reader: &mut T, long_poll_duration: Duration) -> anyhow::Result<Vec<Sample>>
+fn jfr_samples<T>(reader: &mut T, config: &LongPollConfig) -> anyhow::Result<Vec<Sample>>
 where
     T: Read + Seek,
 {
     let mut jfr_reader = JfrReader::new(reader);
-    let long_poll_duration = long_poll_duration.as_micros();
 
     let mut samples = vec![];
     let mut tys = JfrTypeInfo::new();
@@ -595,7 +622,7 @@ where
                         sampled_thread,
                         stacktrace,
                         start_time_ticks,
-                        long_poll_duration,
+                        config,
                     ) {
                         samples.push(sample);
                     }
@@ -621,7 +648,7 @@ where
                         sampled_thread,
                         stacktrace,
                         start_time_ticks,
-                        long_poll_duration,
+                        config,
                     ) {
                         samples.push(sample);
                     }
@@ -735,7 +762,7 @@ fn print_native_mem_events<F: Write>(
             event.address,
             event
                 .size
-                .map_or("".to_string(), |s| format!(" ({} bytes)", s))
+                .map_or("".to_string(), |s| format!(" ({s} bytes)"))
         )?;
         for (i, frame) in event.frames.iter().enumerate() {
             if i == stack_depth {
@@ -768,35 +795,61 @@ mod test {
     };
     use std::io;
     use std::time::Duration;
+    use test_case::test_case;
 
     #[test]
     fn test_print_samples() {
         let mut to = vec![];
         print_samples(
             &mut to,
-            vec![Sample {
-                delta_t: Duration::from_millis(1),
-                start_time: Duration::from_secs(1),
-                thread_id: 1,
-                frames: vec![
-                    StackFrame {
-                        class_name: None,
-                        name: None,
-                    },
-                    StackFrame {
-                        class_name: None,
-                        name: Some("foo".into()),
-                    },
-                    StackFrame {
-                        class_name: Some("cls".into()),
-                        name: Some("foo".into()),
-                    },
-                    StackFrame {
-                        class_name: Some("cls".into()),
-                        name: Some("bar".into()),
-                    },
-                ],
-            }],
+            vec![
+                Sample {
+                    delta_t: Some(Duration::from_millis(1)),
+                    start_time: Duration::from_secs(1),
+                    thread_id: 1,
+                    frames: vec![
+                        StackFrame {
+                            class_name: None,
+                            name: None,
+                        },
+                        StackFrame {
+                            class_name: None,
+                            name: Some("foo".into()),
+                        },
+                        StackFrame {
+                            class_name: Some("cls".into()),
+                            name: Some("foo".into()),
+                        },
+                        StackFrame {
+                            class_name: Some("cls".into()),
+                            name: Some("bar".into()),
+                        },
+                    ],
+                },
+                Sample {
+                    delta_t: None,
+                    start_time: Duration::from_secs(1),
+                    thread_id: 2,
+                    frames: vec![
+                        StackFrame {
+                            class_name: None,
+                            name: None,
+                        },
+                        StackFrame {
+                            class_name: None,
+                            name: Some("foo".into()),
+                        },
+                        StackFrame {
+                            class_name: Some("cls".into()),
+                            name: Some("foo".into()),
+                        },
+                        StackFrame {
+                            class_name: Some("cls".into()),
+                            name: Some("bar".into()),
+                        },
+                    ],
+                },
+            ],
             3,
         )
         .unwrap();
@@ -808,19 +861,17 @@ mod test {
  -   3: cls.foo
  -   1 more frame(s) (pass --stack-depth=4 to show)
 
+[1.000000] thread 2 - sample with no pollcatch information
+ -   1: <unknown>.<unknown>
+ -   2: <unknown>.foo
+ -   3: cls.foo
+ -   1 more frame(s) (pass --stack-depth=4 to show)
+
 "#
         );
     }
 
-    #[test]
-    fn test_jfr_samples() {
-        let jfr = include_bytes!("../../tests/test.jfr");
-        let samples = jfr_samples(&mut io::Cursor::new(jfr), Duration::from_micros(200)).unwrap();
-        let mut to = vec![];
-        print_samples(&mut to, samples, 4).unwrap();
-        assert_eq!(
-            String::from_utf8(to).unwrap(),
-            r#"[95.789203] thread 1880 - poll of 219us
+    #[test_case(Some(Duration::from_micros(200)), false, None, r#"[95.789203] thread 1880 - poll of 219us
  -   1: libc.so.6.clock_nanosleep
  -   2: libc.so.6.nanosleep
  -   3: simple.std::thread::sleep
@@ -848,8 +899,41 @@ mod test {
  -   4: simple.simple::slow::short_sleep
  -  55 more frame(s) (pass --stack-depth=59 to show)
 
-"#
-        );
+"#; "test_200")]
+    #[test_case(Some(Duration::from_micros(200)), true, Some(1), r#"[87.831540] thread 1878 - sample with no pollcatch information
+ -   1: libc.so.6.epoll_wait
+ -   2: simple.mio::sys::unix::selector::Selector::select
+ -   3: simple.mio::poll::Poll::poll
+ -   4: simple.tokio::runtime::io::driver::Driver::turn
+ -  49 more frame(s) (pass --stack-depth=53 to show)
+
+"#; "test_ignore_non_pollcatch")]
+    #[test_case(None, false, Some(1), r#"[86.789064] thread 1878 - poll of 77us
+ -   1: libc.so.6.clock_nanosleep
+ -   2: libc.so.6.nanosleep
+ -   3: simple.std::thread::sleep
+ -   4: simple.simple::slow::short_sleep
+ -  55 more frame(s) (pass --stack-depth=59 to show)
+
+"#; "test_no_duration")]
+    fn test_jfr_samples(
+        min_length: Option<Duration>,
+        include_non_pollcatch: bool,
+        truncate: Option<usize>,
+        result: &str,
+    ) {
+        let jfr = include_bytes!("../../tests/test.jfr");
+        let config = crate::LongPollConfig {
+            min_length,
+            include_non_pollcatch,
+        };
+        let mut samples = jfr_samples(&mut io::Cursor::new(jfr), &config).unwrap();
+        let mut to = vec![];
+        if let Some(truncate_to) = truncate {
+            samples.truncate(truncate_to);
+        }
+        print_samples(&mut to, samples, 4).unwrap();
+        assert_eq!(String::from_utf8(to).unwrap(), result);
     }
 
     #[test]
