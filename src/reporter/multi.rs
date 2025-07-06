@@ -24,7 +24,7 @@ impl fmt::Display for MultiError {
                 write!(f, ", ")?;
             }
             first = false;
-            write!(f, "{}: {}", reporter, err)?;
+            write!(f, "{reporter}: {err}")?;
         }
         write!(f, "}}")
     }
@@ -57,7 +57,7 @@ impl Reporter for MultiReporter {
             reporter
                 .report(jfr_ref.to_owned(), metadata)
                 .await
-                .map_err(move |e| (format!("{:?}", reporter), e))
+                .map_err(move |e| (format!("{reporter:?}"), e))
         }))
         .await;
         // return all errors

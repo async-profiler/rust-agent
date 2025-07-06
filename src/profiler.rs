@@ -99,7 +99,7 @@ impl ProfilerOptions {
             jfr_file_path.display()
         );
         if let Some(ref native_mem) = self.native_mem {
-            args.push_str(&format!(",nativemem={}", native_mem));
+            args.push_str(&format!(",nativemem={native_mem}"));
         }
         args
     }
