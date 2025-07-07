@@ -96,12 +96,9 @@ async fn read_fargate_metadata(
             "not running on fargate".into(),
         ));
     };
-    let uri = format!(
-        "{}/task",
-        // Only available if running on Fargate. Something like
-        // `http://169.254.232.106/v4/5261e761e0e2a3d92da3f02c8e5bab1f-3356750833`.
-        md_uri
-    );
+    // Only available if running on Fargate. Something like
+    // `http://169.254.232.106/v4/5261e761e0e2a3d92da3f02c8e5bab1f-3356750833`.
+    let uri = format!("{md_uri}/task",);
 
     let req = http_client
         .request(Method::GET, uri.clone())

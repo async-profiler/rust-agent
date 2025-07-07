@@ -61,7 +61,7 @@ impl Reporter for LocalReporter {
     ) -> Result<(), Box<dyn std::error::Error + Send>> {
         self.report_profiling_data(jfr, metadata)
             .await
-            .map_err(|e| Box::new(e) as _)
+            .map_err(|e| Box::new(LocalReporterError::IoError(e)) as _)
     }
 }
 
