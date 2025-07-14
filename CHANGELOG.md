@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.8](https://github.com/async-profiler/rust-agent/compare/v0.1.7...v0.1.8) - 2025-07-14
+
+### Added
+
+- *(decoder)* improve handling of decoding non-pollcatch samples
+
+### Other
+
+- ci: set up trusted publishing
+- fix clippy in new compilers
+- update zip to 4.0
+
 ## [0.1.7](https://github.com/async-profiler/rust-agent/compare/v0.1.6...v0.1.7) - 2025-05-25
 
 ### Fixed
