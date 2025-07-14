@@ -14,6 +14,7 @@ jobs:
     if: github.repository_owner == 'async-profiler'
     name: Release-plz release
     runs-on: ubuntu-latest
+    environment: release
 
     steps:
       - name: Checkout repository
@@ -22,10 +23,13 @@ jobs:
           fetch-depth: 0
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: Authenticate to crates.io
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
       - name: Run release-plz
         uses: release-plz/action@v0.5.102
         with:
           command: release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
