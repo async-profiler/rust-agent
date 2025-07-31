@@ -76,7 +76,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install async-profiler Dependencies
-        run: sudo apt-get install -y sudo libicu-dev patchelf curl make g++ openjdk-11-jdk-headless gcovr
+        run: sudo apt-get update && sudo apt-get install -y sudo libicu-dev patchelf curl make g++ openjdk-11-jdk-headless gcovr
       - name: Build async-profiler
         working-directory: tests
         shell: bash
