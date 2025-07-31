@@ -8,7 +8,7 @@ jobs:
     strategy:
       matrix:
         toolchain:
-          - "1.85" # Current MSRV due to Cargo MSRV feature
+          - "1.86" # Current MSRV due to 1.85 having problems with the AWS SDK
           - stable
         flags:
           - "--all-features"
