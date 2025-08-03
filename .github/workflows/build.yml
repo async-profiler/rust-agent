@@ -69,27 +69,10 @@ jobs:
         with:
           name: pollcatch-decoder
           path: ./decoder/target/debug/pollcatch-decoder
-  build-async-profiler:
-    name: Build async-profiler
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install async-profiler Dependencies
-        run: sudo apt-get update && sudo apt-get install -y sudo libicu-dev patchelf curl make g++ openjdk-11-jdk-headless gcovr
-      - name: Build async-profiler
-        working-directory: tests
-        shell: bash
-        run: ./build-async-profiler.sh
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: libasyncProfiler
-          path: ./tests/async-profiler/build/lib/libasyncProfiler.so
   test:
     name: Integration Test
     runs-on: ubuntu-latest
-    needs: [build-for-testing, build-decoder, build-async-profiler]
+    needs: [build-for-testing, build-decoder]
     steps:
       - uses: actions/checkout@v4
       - name: Download pollcatch-decoder
@@ -102,11 +85,10 @@ jobs:
         with:
           name: example-simple
           path: ./tests
-      - name: Download libasyncProfiler
-        uses: actions/download-artifact@v4
-        with:
-          name: libasyncProfiler
-          path: ./tests
+      - name: Download async-profiler
+        shell: bash
+        working-directory: tests
+        run: wget https://github.com/async-profiler/async-profiler/releases/download/v4.1/async-profiler-4.1-linux-x64.tar.gz -O async-profiler.tar.gz && tar xvf async-profiler.tar.gz && mv -vf async-profiler-*/lib/libasyncProfiler.so .
       - name: Run integration test
         shell: bash
         working-directory: tests

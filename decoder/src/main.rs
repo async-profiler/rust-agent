@@ -54,6 +54,14 @@ enum Commands {
         #[arg(long, default_value = "5")]
         stack_depth: usize,
     },
+    /// Print the total duration (in seconds) of the JFR recording. Used in the integration tests.
+    Duration {
+        /// JFR file to read from
+        jfr_file: OsString,
+        /// If true, unzip first
+        #[arg(long)]
+        zip: bool,
+    },
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -78,6 +86,24 @@ fn extract_async_profiler_jfr_from_zip(file: File) -> anyhow::Result<Option<Vec<
     Ok(None)
 }
 
+// doing this as a macro because functions are not higher-order enough
+// extract events from $jfr_file, $zip decides if it's a zip, then run $f($FILE, input)
+macro_rules! extract_events_from_path {
+    ($jfr_file:expr, $zip:expr, $f:expr, $input:expr) => {{
+        let mut jfr_file = std::fs::File::open($jfr_file)?;
+        match $zip {
+            false => $f(&mut jfr_file, $input),
+            true => {
+                if let Some(data) = extract_async_profiler_jfr_from_zip(jfr_file)? {
+                    $f(&mut Cursor::new(&data), $input)
+                } else {
+                    anyhow::bail!("no async_profiler_dump_0.jfr file found");
+                }
+            }
+        }
+    }};
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
     tracing_subscriber::fmt::init();
@@ -89,21 +115,11 @@ fn main() -> anyhow::Result<()> {
             zip,
             include_non_pollcatch,
         } => {
-            let mut jfr_file = std::fs::File::open(jfr_file)?;
             let config = LongPollConfig {
                 min_length,
                 include_non_pollcatch,
             };
-            let samples = match zip {
-                false => jfr_samples(&mut jfr_file, &config)?,
-                true => {
-                    if let Some(data) = extract_async_profiler_jfr_from_zip(jfr_file)? {
-                        jfr_samples(&mut Cursor::new(&data), &config)?
-                    } else {
-                        anyhow::bail!("no async_profiler_dump_0.jfr file found");
-                    }
-                }
-            };
+            let samples = extract_events_from_path!(jfr_file, zip, jfr_samples, &config)?;
             print_samples(&mut io::stdout(), samples, stack_depth).ok();
             Ok(())
         }
@@ -113,18 +129,13 @@ fn main() -> anyhow::Result<()> {
             zip,
             stack_depth,
         } => {
-            let mut jfr_file = std::fs::File::open(jfr_file)?;
-            let events = match zip {
-                false => jfr_native_mem_events(&mut jfr_file, &type_)?,
-                true => {
-                    if let Some(data) = extract_async_profiler_jfr_from_zip(jfr_file)? {
-                        jfr_native_mem_events(&mut Cursor::new(&data), &type_)?
-                    } else {
-                        anyhow::bail!("no async_profiler_dump_0.jfr file found");
-                    }
-                }
-            };
+            let events = extract_events_from_path!(jfr_file, zip, jfr_native_mem_events, &type_)?;
             print_native_mem_events(&mut io::stdout(), events, &type_, stack_depth).ok();
+            Ok(())
+        }
+        Commands::Duration { jfr_file, zip } => {
+            let duration = extract_events_from_path!(jfr_file, zip, jfr_duration, ())?;
+            println!("{}", duration.as_secs_f64());
             Ok(())
         }
     }
@@ -659,6 +670,19 @@ where
     Ok(samples)
 }
 
+fn jfr_duration<T>(reader: &mut T, _config: ()) -> anyhow::Result<Duration>
+where
+    T: Read + Seek,
+{
+    let mut jfr_reader = JfrReader::new(reader);
+
+    let total_nanos = jfr_reader
+        .chunks()
+        .map(|i| i.map(|i| i.1.header.duration_nanos))
+        .sum::<Result<i64, _>>()?;
+    Ok(Duration::from_nanos(total_nanos as u64))
+}
+
 #[derive(Debug)]
 struct NativeMemEvent {
     start_time: Duration,
@@ -934,6 +958,9 @@ mod test {
         }
         print_samples(&mut to, samples, 4).unwrap();
         assert_eq!(String::from_utf8(to).unwrap(), result);
+
+        let duration = crate::jfr_duration(&mut io::Cursor::new(jfr), ()).unwrap();
+        assert_eq!(duration.as_nanos(), 15003104000);
     }
 
     #[test]

@@ -134,7 +134,7 @@ async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
         .build();
 
     tracing::info!("starting profiler");
-    profiler.spawn()?;
+    let handle = profiler.spawn_controllable()?;
     tracing::info!("profiler started");
 
     if let Some(timeout) = args.duration {
@@ -144,6 +144,8 @@ async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
     } else {
         slow::run().await;
     }
+
+    handle.stop().await;
 
     Ok(())
 }

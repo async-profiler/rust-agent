@@ -2,7 +2,8 @@
 #[allow(deprecated)]
 fn accidentally_slow() {
     std::thread::sleep_ms(10);
-    std::hint::black_box(0);
+    // do a phony allocation for the allocation profiler
+    std::hint::black_box(Vec::<u8>::with_capacity(1 << 20));
 }
 
 #[inline(never)]
