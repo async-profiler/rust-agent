@@ -13,7 +13,18 @@ rm -f profiles/*.jfr
 # Pass --worker-threads 16 to make the test much less flaky since there is always some worker thread running
 ./simple --local profiles --duration 30s --reporting-interval 10s --worker-threads 16 --native-mem 4k
 
+found_good=0
+
 for profile in profiles/*.jfr; do
+    duration=$(./pollcatch-decoder duration "$profile")
+    # Ignore "partial" profiles of less than 8s
+    if [[ $duration > 8 ]]; then
+        found_good=1
+    else
+        echo "Profile $profile is too short"
+        continue
+    fi
+
     # Basic event presence check
     native_malloc_count=$(./pollcatch-decoder nativemem --type malloc "$profile" | wc -l)
     if [ "$native_malloc_count" -lt 1 ]; then
@@ -48,3 +59,8 @@ for profile in profiles/*.jfr; do
         exit 1
     fi
 done
+
+if [ "$found_good" -eq 0 ]; then
+    echo Found no good profiles
+    exit 1
+fi
