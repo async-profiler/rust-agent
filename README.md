@@ -190,6 +190,25 @@ the stack trace which will not go past one or two `unknown` frames.
 
 [`jfrs`]: https://docs.rs/jfrs
 
+### Dealing with `Error: decoder only supports tsc profiles, not "monotonic"`
+
+Pollcatch uses the CPU timestamp counter (tsc) to correlate profiles, and requires async-profiler to use the
+CPU timestamp counter as well. async-profiler normally tries to use the tsc, and only reverts to using the
+`monotonic` counter if it's unable to.
+
+Potential causes for async-profiler not being able to use the timestamp counter:
+
+1. An architecture that is not supported by async-profiler (currently, only x86-64 and aarch64 are supported)
+2. If you are loading a Java Virtual Machine (JVM) into your process, async-profiler tries to coordinate with
+   the JVM's timestamp mechanism. If that fails due to some JVM support or integration issue, it will revert to
+   using the monotonic clock, which will not work with pollcatch.
+
+   If you encounter this problem, you can work-around it by initializing the async-profiler Rust agent
+   before you initialize the JVM. This will make the Java-specific analyses work less well, but they are
+   generally less important in a pollcatch context.
+   
+In either case, it might be worth reporting an issue to the async-profiler team.
+
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
