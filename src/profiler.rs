@@ -75,6 +75,7 @@ impl JfrFile {
 /// Currently supports:
 /// - Native memory allocation tracking
 #[derive(Debug, Default)]
+#[non_exhaustive]
 pub struct ProfilerOptions {
     /// If set, the profiler will collect information about
     /// native memory allocations.
@@ -89,13 +90,21 @@ pub struct ProfilerOptions {
     ///
     /// [ProfilingModes in the async-profiler docs]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilingModes.md#native-memory-leaks
     pub native_mem: Option<String>,
+    cpu_interval: Option<usize>,
+    wall_clock_millis: Option<usize>,
 }
+
+const DEFAULT_CPU_INTERVAL_NANOS: usize = 100_000_000;
+const DEFAULT_WALL_CLOCK_INTERVAL_MILLIS: usize = 1_000;
 
 impl ProfilerOptions {
     /// Convert the profiler options to a string of arguments for the async-profiler.
     pub fn to_args_string(&self, jfr_file_path: &std::path::Path) -> String {
         let mut args = format!(
-            "start,event=cpu,interval=100000000,wall=1000ms,jfr,cstack=dwarf,file={}",
+            "start,event=cpu,interval={},wall={}ms,jfr,cstack=dwarf,file={}",
+            self.cpu_interval.unwrap_or(DEFAULT_CPU_INTERVAL_NANOS),
+            self.wall_clock_millis
+                .unwrap_or(DEFAULT_WALL_CLOCK_INTERVAL_MILLIS),
             jfr_file_path.display()
         );
         if let Some(ref native_mem) = self.native_mem {
@@ -109,18 +118,19 @@ impl ProfilerOptions {
 #[derive(Debug, Default)]
 pub struct ProfilerOptionsBuilder {
     native_mem: Option<String>,
+    cpu_interval: Option<usize>,
+    wall_clock_millis: Option<usize>,
 }
 
 impl ProfilerOptionsBuilder {
-    /// If set, the profiler will collect information about
-    /// native memory allocations.
+    /// Same as [ProfilerOptionsBuilder::with_native_mem_bytes], but pass
+    /// the string input directly to async_profiler.
     ///
     /// The value is the interval in bytes or in other units,
     /// if followed by k (kilobytes), m (megabytes), or g (gigabytes).
     ///
-    /// See [ProfilingModes in the async-profiler docs] for more details.
-    ///
-    /// [ProfilingModes in the async-profiler docs]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilingModes.md#native-memory-leaks
+    /// Prefer using [ProfilerOptionsBuilder::with_native_mem_bytes], since it's
+    /// type-checked.
     ///
     /// ### Examples
     ///
@@ -142,14 +152,31 @@ impl ProfilerOptionsBuilder {
     /// # Ok(())
     /// # }
     /// ```
+    pub fn with_native_mem(mut self, native_mem_interval: String) -> Self {
+        self.native_mem = Some(native_mem_interval);
+        self
+    }
+
+    /// If set, the profiler will collect information about
+    /// native memory allocations.
     ///
-    /// This will sample every allocation (potentially slow):
+    /// The argument passed is the profiling interval - the profiler will
+    /// sample allocations every about that many bytes.
+    ///
+    /// See [ProfilingModes in the async-profiler docs] for more details.
+    ///
+    /// [ProfilingModes in the async-profiler docs]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilingModes.md#native-memory-leaks
+    ///
+    /// ### Examples
+    ///
+    /// This will sample allocations for every 10 megabytes allocated:
+    ///
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
     /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// # fn main() -> Result<(), SpawnError> {
-    /// let opts = ProfilerOptionsBuilder::default().with_native_mem("0".into()).build();
+    /// let opts = ProfilerOptionsBuilder::default().with_native_mem_bytes(10_000_000).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
     ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
@@ -160,8 +187,119 @@ impl ProfilerOptionsBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_native_mem(mut self, native_mem_interval: String) -> Self {
-        self.native_mem = Some(native_mem_interval);
+    ///
+    /// This will sample every allocation (potentially slow):
+    /// ```
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # fn main() -> Result<(), SpawnError> {
+    /// let opts = ProfilerOptionsBuilder::default().with_native_mem_bytes(0).build();
+    /// let profiler = ProfilerBuilder::default()
+    ///     .with_profiler_options(opts)
+    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .build();
+    /// # if false { // don't spawn the profiler in doctests
+    /// profiler.spawn()?;
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_native_mem_bytes(mut self, native_mem_interval: usize) -> Self {
+        self.native_mem = Some(native_mem_interval.to_string());
+        self
+    }
+
+    /// Sets the interval, in nanoseconds, in which the profiler will collect
+    /// CPU-time samples, via the [async-profiler `interval` option].
+    ///
+    /// CPU-time samples (JFR `jdk.ExecutionSample`) sample only threads that
+    /// are currently running on a CPU, not threads that are sleeping.
+    ///
+    /// It can use a higher frequency than wall-clock sampling since the
+    /// number of the threads that are running on a CPU at a given time is
+    /// naturally limited by the number of CPUs, while the number of sleeping
+    /// threads can be much larger.
+    ///
+    /// The default is to do a CPU-time sample every 100 milliseconds.
+    ///
+    /// The async-profiler agent collects both CPU time and wall-clock time
+    /// samples, so this function should normally be used along with
+    /// [ProfilerOptionsBuilder::with_wall_clock_millis].
+    ///
+    /// [async-profiler `interval` option]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilerOptions.md#options-applicable-to-any-output-format
+    ///
+    /// ### Examples
+    ///
+    /// This will sample allocations for every 10 CPU milliseconds (when running)
+    /// and 100 wall-clock milliseconds (running or sleeping):
+    ///
+    /// ```
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # fn main() -> Result<(), SpawnError> {
+    /// let opts = ProfilerOptionsBuilder::default()
+    ///     .with_cpu_interval_nanos(10_000_000)
+    ///     .with_wall_clock_millis(100)
+    ///     .build();
+    /// let profiler = ProfilerBuilder::default()
+    ///     .with_profiler_options(opts)
+    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .build();
+    /// # if false { // don't spawn the profiler in doctests
+    /// profiler.spawn()?;
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_cpu_interval_nanos(mut self, cpu_interval_nanos: usize) -> Self {
+        self.cpu_interval = Some(cpu_interval_nanos);
+        self
+    }
+
+    /// Sets the interval, in milliseconds, in which the profiler will collect
+    /// wall-clock samples, via the [async-profiler `wall` option].
+    ///
+    /// Wall-clock samples (JFR `profiler.WallClockSample`) sample threads
+    /// whether they are sleeping or running, and can therefore be
+    /// very useful for finding threads that are blocked, for example
+    /// on a synchronous lock.
+    ///
+    /// The default is to do a wall-clock sample every second.
+    ///
+    /// The async-profiler agent collects both CPU time and wall-clock time
+    /// samples, so this function should normally be used along with
+    /// [ProfilerOptionsBuilder::with_cpu_interval_nanos].
+    ///
+    /// [async-profiler `wall` option]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilerOptions.md#options-applicable-to-any-output-format
+    ///
+    /// ### Examples
+    ///
+    /// This will sample allocations for every 10 CPU milliseconds (when running)
+    /// and 100 wall-clock milliseconds (running or sleeping):
+    ///
+    /// ```
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # fn main() -> Result<(), SpawnError> {
+    /// let opts = ProfilerOptionsBuilder::default()
+    ///     .with_cpu_interval_nanos(10_000_000)
+    ///     .with_wall_clock_millis(100)
+    ///     .build();
+    /// let profiler = ProfilerBuilder::default()
+    ///     .with_profiler_options(opts)
+    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .build();
+    /// # if false { // don't spawn the profiler in doctests
+    /// profiler.spawn()?;
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn with_wall_clock_millis(mut self, wall_clock_millis: usize) -> Self {
+        self.wall_clock_millis = Some(wall_clock_millis);
         self
     }
 
@@ -169,6 +307,8 @@ impl ProfilerOptionsBuilder {
     pub fn build(self) -> ProfilerOptions {
         ProfilerOptions {
             native_mem: self.native_mem,
+            wall_clock_millis: self.wall_clock_millis,
+            cpu_interval: self.cpu_interval,
         }
     }
 }
@@ -1228,6 +1368,8 @@ mod tests {
     fn test_profiler_options_to_args_string_with_native_mem() {
         let opts = ProfilerOptions {
             native_mem: Some("10m".to_string()),
+            wall_clock_millis: None,
+            cpu_interval: None,
         };
         let dummy_path = Path::new("/tmp/test.jfr");
         let args = opts.to_args_string(dummy_path);
@@ -1237,9 +1379,22 @@ mod tests {
     #[test]
     fn test_profiler_options_builder() {
         let opts = ProfilerOptionsBuilder::default()
-            .with_native_mem("5m".to_string())
+            .with_native_mem_bytes(5000000)
             .build();
 
-        assert_eq!(opts.native_mem, Some("5m".to_string()));
+        assert_eq!(opts.native_mem, Some("5000000".to_string()));
+    }
+
+    #[test]
+    fn test_profiler_options_builder_all_options() {
+        let opts = ProfilerOptionsBuilder::default()
+            .with_native_mem_bytes(5000000)
+            .with_cpu_interval_nanos(1_000_000_000)
+            .with_wall_clock_millis(10_000)
+            .build();
+
+        let dummy_path = Path::new("/tmp/test.jfr");
+        let args = opts.to_args_string(dummy_path);
+        assert_eq!(args, "start,event=cpu,interval=1000000000,wall=10000ms,jfr,cstack=dwarf,file=/tmp/test.jfr,nativemem=5000000");
     }
 }
