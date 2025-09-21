@@ -184,19 +184,108 @@ pub struct ProfilerBuilder {
 }
 
 impl ProfilerBuilder {
-    /// Sets the reporting interval.
+    /// Sets the reporting interval (default: 30 seconds).
+    ///
+    /// This is the interval that samples are *reported* at, and is unrelated
+    /// to the interval in which samples are *collected*. There are few
+    /// needs to change this from the default 30 seconds.
+    ///
+    /// ## Example
+    ///
+    /// ```no_run
+    /// # use std::path::PathBuf;
+    /// # use std::time::Duration;
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # let path = PathBuf::from(".");
+    /// let agent = ProfilerBuilder::default()
+    ///     .with_reporter(LocalReporter::new(path))
+    ///     .with_reporting_interval(Duration::from_secs(15))
+    ///     .build()
+    ///     .spawn()?;
+    /// # Ok::<_, SpawnError>(())
+    /// ```
     pub fn with_reporting_interval(mut self, i: Duration) -> ProfilerBuilder {
         self.reporting_interval = Some(i);
         self
     }
 
-    /// Sets the reporter.
+    /// Sets the [`Reporter`], which is used to upload the collected profiling
+    /// data. Common reporters are [`LocalReporter`], and, with the `s3-no-defaults`
+    /// feature enabled,
+    #[cfg_attr(not(feature = "s3-no-defaults"), doc = "`S3Reporter`.")]
+    #[cfg_attr(feature = "s3-no-defaults", doc = "[`S3Reporter`].")]
+    /// It is also possible to write your own [`Reporter`].
+    ///
+    /// If you want to output to multiple reporters, you can use
+    /// [`MultiReporter`].
+    ///
+    /// [`LocalReporter`]: crate::reporter::local::LocalReporter
+    /// [`MultiReporter`]: crate::reporter::multi::MultiReporter
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = "[`S3Reporter`]: crate::reporter::s3::S3Reporter"
+    )]
+    ///
+    /// ## Example
+    ///
+    /// ```no_run
+    /// # use std::path::PathBuf;
+    /// # use std::time::Duration;
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # let path = PathBuf::from(".");
+    /// let agent = ProfilerBuilder::default()
+    ///     .with_reporter(LocalReporter::new(path))
+    ///     .build()
+    ///     .spawn()?;
+    /// # Ok::<_, SpawnError>(())
+    /// ```
     pub fn with_reporter(mut self, r: impl Reporter + Send + Sync + 'static) -> ProfilerBuilder {
         self.reporter = Some(Box::new(r));
         self
     }
 
     /// Provide custom agent metadata.
+    ///
+    /// The async-profiler Rust agent sends metadata to the [Reporter] with
+    /// the identity of the current host and process, which is normally
+    /// transmitted as `metadata.json` within the generated `.zip` file,
+    /// using the schema format [`reporter::s3::MetadataJson`].
+    ///
+    /// That metadata can later be used by tooling to be able to sort
+    /// profiling reports by host.
+    ///
+    /// async-profiler Rust agent will by default try to fetch the metadata
+    /// using [IMDS] when running on [Amazon EC2] or [Amazon Fargate], and
+    /// will error if it's unable to find it. If you are running the
+    /// async-profiler agent on any other form of compute,
+    /// you will need to create and attach your own metadata
+    /// by calling this function.
+    ///
+    /// ## Example
+    ///
+    /// This will create a reporter with empty ([AgentMetadata::Other])
+    /// metadata.
+    ///
+    /// ```no_run
+    /// # use std::path::PathBuf;
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # use async_profiler_agent::metadata::AgentMetadata;
+    /// # let path = PathBuf::from(".");
+    /// let agent = ProfilerBuilder::default()
+    ///     .with_reporter(LocalReporter::new(path))
+    ///     .with_custom_agent_metadata(AgentMetadata::Other)
+    ///     .build()
+    ///     .spawn()?;
+    /// # Ok::<_, SpawnError>(())
+    /// ```
+    ///
+    /// [`reporter::s3::MetadataJson`]: crate::reporter::s3::MetadataJson
+    /// [Amazon EC2]: https://aws.amazon.com/ec2
+    /// [Amazon Fargate]: https://aws.amazon.com/fargate
+    /// [IMDS]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
     pub fn with_custom_agent_metadata(mut self, j: AgentMetadata) -> ProfilerBuilder {
         self.agent_metadata = Some(j);
         self
