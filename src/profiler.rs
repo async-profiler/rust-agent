@@ -416,12 +416,24 @@ enum TickError {
 #[non_exhaustive]
 /// An error that happened spawning a profiler
 pub enum SpawnError {
-    /// Error interactive with async-profiler
+    /// Error internal to async-profiler
     #[error(transparent)]
     AsProf(#[from] asprof::AsProfError),
     /// Error writing to a tempfile
-    #[error("tempfile error: {0}")]
-    TempFile(io::Error),
+    #[error("tempfile error")]
+    TempFile(#[source] io::Error),
+}
+
+#[derive(Debug, Error)]
+#[non_exhaustive]
+/// An error that happened spawning a profiler
+pub enum SpawnThreadSimpleError {
+    /// Error internal to async-profiler
+    #[error(transparent)]
+    AsProf(#[from] SpawnError),
+    /// Error constructing Tokio runtime
+    #[error("constructing Tokio runtime")]
+    ConstructRt(#[source] io::Error),
 }
 
 // no control messages currently
@@ -471,6 +483,58 @@ impl RunningProfiler {
     pub fn detach(self) {
         self.detach_inner();
     }
+
+    fn spawn_attached(
+        self,
+        runtime: tokio::runtime::Runtime,
+        spawn_fn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::thread::JoinHandle<()>,
+    ) -> RunningProfilerThread {
+        RunningProfilerThread {
+            stop_channel: self.stop_channel,
+            join_handle: spawn_fn(Box::new(move || {
+                let _ = runtime.block_on(self.join_handle);
+            })),
+        }
+    }
+
+    fn spawn_detached(
+        self,
+        runtime: tokio::runtime::Runtime,
+        spawn_fn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::thread::JoinHandle<()>,
+    ) {
+        spawn_fn(Box::new(move || {
+            let _stop_channel = self.stop_channel;
+            let _ = runtime.block_on(self.join_handle);
+        }));
+    }
+}
+
+/// A handle to a running profiler, running on a separate thread.
+///
+/// Currently just allows for stopping the profiler.
+///
+/// Dropping this handle will request that the profiler will stop.
+#[must_use = "dropping this stops the profiler, call .detach() to detach"]
+pub struct RunningProfilerThread {
+    stop_channel: tokio::sync::oneshot::Sender<Control>,
+    join_handle: std::thread::JoinHandle<()>,
+}
+
+impl RunningProfilerThread {
+    /// Request that the current profiler stops and wait until it exits.
+    ///
+    /// This will cause the currently-pending profile information to be flushed.
+    ///
+    /// After this function returns, it is correct and safe to [spawn] a new
+    /// [Profiler], possibly with a different configuration. Therefore,
+    /// this function can be used to "reconfigure" a profiler by stopping
+    /// it and then starting a new one with a different configuration.
+    ///
+    /// [spawn]: Profiler::spawn_controllable
+    pub fn stop(self) {
+        drop(self.stop_channel);
+        let _ = self.join_handle.join();
+    }
 }
 
 /// Rust profiler based on [async-profiler].
@@ -497,6 +561,12 @@ impl Profiler {
     ///
     /// [JoinHandle]: tokio::task::JoinHandle
     ///
+    /// ### Tokio Runtime
+    ///
+    /// This function must be run within a Tokio runtime. If your application does
+    /// not have a `main` Tokio runtime, see
+    /// [Profiler::spawn_controllable_thread_to_runtime].
+    ///
     /// ### Example
     ///
     /// This example uses a [LocalReporter] which reports the profiles to
@@ -522,6 +592,107 @@ impl Profiler {
         self.spawn_controllable().map(RunningProfiler::detach_inner)
     }
 
+    /// Like [Self::spawn], but instead of spawning within the current Tokio
+    /// runtime, spawns within a set Tokio runtime and then runs a thread that calls
+    /// [tokio::runtime::Runtime::block_on] on that runtime.
+    ///
+    /// If your configuration is standard, use [Profiler::spawn_thread].
+    ///
+    /// If you want to be able to stop the resulting profiler, use
+    /// [Profiler::spawn_controllable_thread_to_runtime].
+    ///
+    /// `spawn_fn` should be [`std::thread::spawn`], or some function that behaves like it (to
+    /// allow for configuring thread properties).
+    ///
+    /// This is to be used when your program does not have a "main" Tokio runtime already set up.
+    ///
+    /// ### Example
+    ///
+    /// This example uses a [LocalReporter] which reports the profiles to
+    /// a directory. It works with any other [Reporter].
+    ///
+    /// [LocalReporter]: crate::reporter::local::LocalReporter
+    ///
+    /// ```no_run
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// let rt = tokio::runtime::Builder::new_current_thread()
+    ///     .enable_all()
+    ///     .build()?;
+    /// let profiler = ProfilerBuilder::default()
+    ///    .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///    .build();
+    ///
+    /// profiler.spawn_thread_to_runtime(
+    ///     rt, std::thread::spawn
+    /// )?;
+    /// # Ok::<_, anyhow::Error>(())
+    /// ```
+    pub fn spawn_thread_to_runtime(
+        self,
+        runtime: tokio::runtime::Runtime,
+        spawn_fn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::thread::JoinHandle<()>,
+    ) -> Result<(), SpawnError> {
+        self.spawn_thread_inner(asprof::AsProf::builder().build(), runtime, spawn_fn)
+    }
+
+    /// Like [Self::spawn], but instead of spawning within the current Tokio
+    /// runtime, spawns within a new Tokio runtime and then runs a thread that calls
+    /// [tokio::runtime::Runtime::block_on] on that runtime, setting up the runtime
+    /// by itself.
+    ///
+    /// If your configuration is less standard, use [Profiler::spawn_thread_to_runtime]. Calling
+    /// [Profiler::spawn_thread] is equivalent to calling [Profiler::spawn_thread_to_runtime]
+    /// with the following:
+    /// 1. a current thread runtime with background worker threads (these exist
+    ///    for blocking IO) named "asprof-worker"
+    /// 2. a controller thread (the "main" thread of the runtime) named "asprof-agent"
+    ///
+    /// If you want to be able to stop the resulting profiler, use
+    /// [Profiler::spawn_controllable_thread_to_runtime].
+    ///
+    /// This is to be used when your program does not have a "main" Tokio runtime already set up.
+    ///
+    /// ### Example
+    ///
+    /// This example uses a [LocalReporter] which reports the profiles to
+    /// a directory. It works with any other [Reporter].
+    ///
+    /// [LocalReporter]: crate::reporter::local::LocalReporter
+    ///
+    /// ```no_run
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// let profiler = ProfilerBuilder::default()
+    ///    .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///    .build();
+    ///
+    /// profiler.spawn_thread()?;
+    /// # Ok::<_, anyhow::Error>(())
+    /// ```
+    pub fn spawn_thread(self) -> Result<(), SpawnThreadSimpleError> {
+        // using "asprof" in thread name to deal with 15 character + \0 length limit
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .thread_name("asprof-worker".to_owned())
+            .enable_all()
+            .build()
+            .map_err(SpawnThreadSimpleError::ConstructRt)?;
+        let builder = std::thread::Builder::new().name("asprof-agent".to_owned());
+        self.spawn_thread_to_runtime(rt, |t| builder.spawn(t).expect("thread name contains nuls"))
+            .map_err(SpawnThreadSimpleError::AsProf)
+    }
+
+    fn spawn_thread_inner<E: ProfilerEngine>(
+        self,
+        asprof: E,
+        runtime: tokio::runtime::Runtime,
+        spawn_fn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::thread::JoinHandle<()>,
+    ) -> Result<(), SpawnError> {
+        let handle: RunningProfiler = runtime.block_on(async move { self.spawn_inner(asprof) })?;
+        handle.spawn_detached(runtime, spawn_fn);
+        Ok(())
+    }
+
     /// Like [Self::spawn], but returns a [RunningProfiler] that allows for controlling
     /// (currently only stopping) the profiler.
     ///
@@ -536,6 +707,12 @@ impl Profiler {
     ///
     /// This function will fail if it is unable to start async-profiler, for example
     /// if it can't find or load `libasyncProfiler.so`.
+    ///
+    /// ### Tokio Runtime
+    ///
+    /// This function must be run within a Tokio runtime. If your application does
+    /// not have a `main` Tokio runtime, see
+    /// [Profiler::spawn_controllable_thread_to_runtime].
     ///
     /// ### Example
     ///
@@ -572,6 +749,63 @@ impl Profiler {
     /// ```
     pub fn spawn_controllable(self) -> Result<RunningProfiler, SpawnError> {
         self.spawn_inner(asprof::AsProf::builder().build())
+    }
+
+    /// Like [Self::spawn_controllable], but instead of spawning within the current Tokio
+    /// runtime, spawns within a set Tokio runtime and then runs a thread that calls
+    /// [tokio::runtime::Runtime::block_on] on that runtime.
+    ///
+    /// `spawn_fn` should be [`std::thread::spawn`], or some function that behaves like it (to
+    /// allow for configuring thread properties).
+    ///
+    /// This is to be used when your program does not have a "main" Tokio runtime already set up.
+    ///
+    /// ### Example
+    ///
+    /// This example uses a [LocalReporter] which reports the profiles to
+    /// a directory. It works with any other [Reporter].
+    ///
+    /// [LocalReporter]: crate::reporter::local::LocalReporter
+    ///
+    /// ```no_run
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
+    /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// let rt = tokio::runtime::Builder::new_current_thread()
+    ///     .enable_all()
+    ///     .build()?;
+    /// let profiler = ProfilerBuilder::default()
+    ///    .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///    .build();
+    ///
+    /// let profiler = profiler.spawn_controllable_thread_to_runtime(
+    ///     rt, std::thread::spawn
+    /// )?;
+    ///
+    /// # fn got_request_to_disable_profiling() -> bool { false }
+    /// // spawn a task that will disable profiling if requested
+    /// std::thread::spawn(move|| {
+    ///     if got_request_to_disable_profiling() {
+    ///         profiler.stop();
+    ///     }
+    /// });
+    /// # Ok::<_, anyhow::Error>(())
+    /// ```
+    pub fn spawn_controllable_thread_to_runtime(
+        self,
+        runtime: tokio::runtime::Runtime,
+        spawn_fn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::thread::JoinHandle<()>,
+    ) -> Result<RunningProfilerThread, SpawnError> {
+        self.spawn_controllable_thread_inner(asprof::AsProf::builder().build(), runtime, spawn_fn)
+    }
+
+    fn spawn_controllable_thread_inner<E: ProfilerEngine>(
+        self,
+        asprof: E,
+        runtime: tokio::runtime::Runtime,
+        spawn_fn: impl FnOnce(Box<dyn FnOnce() + Send>) -> std::thread::JoinHandle<()>,
+    ) -> Result<RunningProfilerThread, SpawnError> {
+        let handle = runtime.block_on(async move { self.spawn_inner(asprof) })?;
+        Ok(handle.spawn_attached(runtime, spawn_fn))
     }
 
     fn spawn_inner<E: ProfilerEngine>(self, asprof: E) -> Result<RunningProfiler, SpawnError> {
@@ -807,6 +1041,64 @@ mod tests {
         let (jfr, md) = rx.recv().await.unwrap();
         assert_eq!(jfr, "JFR1");
         assert_eq!(e_md, md);
+    }
+
+    #[test_case(false; "uncontrollable")]
+    #[test_case(true; "controllable")]
+    fn test_profiler_local_rt(controllable: bool) {
+        let e_md = AgentMetadata::Ec2AgentMetadata {
+            aws_account_id: "0".into(),
+            aws_region_id: "us-east-1".into(),
+            ec2_instance_id: "i-fake".into(),
+        };
+        let (agent, mut rx) = make_mock_profiler();
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .start_paused(true)
+            .build()
+            .unwrap();
+        // spawn the profiler, doing this before spawning a thread to allow
+        // capturing errors from `spawn`
+        let handle = if controllable {
+            Some(
+                agent
+                    .spawn_controllable_thread_inner::<MockProfilerEngine>(
+                        MockProfilerEngine {
+                            counter: AtomicU32::new(0),
+                        },
+                        rt,
+                        std::thread::spawn,
+                    )
+                    .unwrap(),
+            )
+        } else {
+            agent
+                .spawn_thread_inner::<MockProfilerEngine>(
+                    MockProfilerEngine {
+                        counter: AtomicU32::new(0),
+                    },
+                    rt,
+                    std::thread::spawn,
+                )
+                .unwrap();
+            None
+        };
+
+        let (jfr, md) = rx.blocking_recv().unwrap();
+        assert_eq!(jfr, "JFR0");
+        assert_eq!(e_md, md);
+        let (jfr, md) = rx.blocking_recv().unwrap();
+        assert_eq!(jfr, "JFR1");
+        assert_eq!(e_md, md);
+
+        if let Some(handle) = handle {
+            let drain_thread =
+                std::thread::spawn(move || while let Some(_) = rx.blocking_recv() {});
+            // request a stop
+            handle.stop();
+            // the drain thread should be done
+            drain_thread.join().unwrap();
+        }
     }
 
     enum StopKind {

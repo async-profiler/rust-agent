@@ -40,6 +40,8 @@ struct S3BucketArgs {
 }
 
 /// Simple program to test the profiler agent
+///
+/// This program is intended for test purposes ONLY.
 #[derive(Debug, Parser)]
 #[command(group(
     ArgGroup::new("options")
@@ -62,6 +64,9 @@ struct Args {
     worker_threads: Option<usize>,
     #[arg(long)]
     native_mem: Option<String>,
+    /// Use the spawn_thread API instead of the Tokio API (does not demonstrate stopping)
+    #[arg(long)]
+    spawn_into_thread: bool,
 }
 
 impl Args {
@@ -93,6 +98,16 @@ pub fn main() -> anyhow::Result<()> {
     }
     let rt = rt.build().unwrap();
     rt.block_on(main_internal(args))
+}
+
+async fn run_slow(args: &Args) {
+    if let Some(timeout) = args.duration {
+        tokio::time::timeout(timeout, slow::run())
+            .await
+            .unwrap_err();
+    } else {
+        slow::run().await;
+    }
 }
 
 async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
@@ -133,19 +148,21 @@ async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
         .with_profiler_options(profiler_options)
         .build();
 
-    tracing::info!("starting profiler");
-    let handle = profiler.spawn_controllable()?;
-    tracing::info!("profiler started");
-
-    if let Some(timeout) = args.duration {
-        tokio::time::timeout(timeout, slow::run())
-            .await
-            .unwrap_err();
+    if args.spawn_into_thread {
+        tracing::info!("starting profiler");
+        std::thread::spawn(move || {
+            profiler.spawn_thread().unwrap();
+        });
+        run_slow(&args).await;
     } else {
-        slow::run().await;
-    }
+        tracing::info!("starting profiler");
+        let handle = profiler.spawn_controllable()?;
+        tracing::info!("profiler started");
 
-    handle.stop().await;
+        run_slow(&args).await;
+
+        handle.stop().await;
+    }
 
     Ok(())
 }

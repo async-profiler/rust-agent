@@ -7,15 +7,17 @@
 
 set -exuo pipefail
 
-mkdir -p profiles
-rm -f profiles/*.jfr
+dir="profiles"
+
+mkdir -p $dir
+rm -f $dir/*.jfr
 
 # Pass --worker-threads 16 to make the test much less flaky since there is always some worker thread running
-./simple --local profiles --duration 30s --reporting-interval 10s --worker-threads 16 --native-mem 4k
+./simple --local $dir --duration 30s --reporting-interval 10s --worker-threads 16 --native-mem 4k
 
 found_good=0
 
-for profile in profiles/*.jfr; do
+for profile in $dir/*.jfr; do
     duration=$(./pollcatch-decoder duration "$profile")
     # Ignore "partial" profiles of less than 8s
     if [[ $duration > 8 ]]; then
