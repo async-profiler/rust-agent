@@ -90,12 +90,12 @@ pub struct ProfilerOptions {
     ///
     /// [ProfilingModes in the async-profiler docs]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilingModes.md#native-memory-leaks
     pub native_mem: Option<String>,
-    cpu_interval: Option<usize>,
-    wall_clock_millis: Option<usize>,
+    cpu_interval: Option<u128>,
+    wall_clock_millis: Option<u128>,
 }
 
-const DEFAULT_CPU_INTERVAL_NANOS: usize = 100_000_000;
-const DEFAULT_WALL_CLOCK_INTERVAL_MILLIS: usize = 1_000;
+const DEFAULT_CPU_INTERVAL_NANOS: u128 = 100_000_000;
+const DEFAULT_WALL_CLOCK_INTERVAL_MILLIS: u128 = 1_000;
 
 impl ProfilerOptions {
     /// Convert the profiler options to a string of arguments for the async-profiler.
@@ -118,8 +118,8 @@ impl ProfilerOptions {
 #[derive(Debug, Default)]
 pub struct ProfilerOptionsBuilder {
     native_mem: Option<String>,
-    cpu_interval: Option<usize>,
-    wall_clock_millis: Option<usize>,
+    cpu_interval: Option<u128>,
+    wall_clock_millis: Option<u128>,
 }
 
 impl ProfilerOptionsBuilder {
@@ -210,7 +210,7 @@ impl ProfilerOptionsBuilder {
         self
     }
 
-    /// Sets the interval, in nanoseconds, in which the profiler will collect
+    /// Sets the interva in which the profiler will collect
     /// CPU-time samples, via the [async-profiler `interval` option].
     ///
     /// CPU-time samples (JFR `jdk.ExecutionSample`) sample only threads that
@@ -225,7 +225,7 @@ impl ProfilerOptionsBuilder {
     ///
     /// The async-profiler agent collects both CPU time and wall-clock time
     /// samples, so this function should normally be used along with
-    /// [ProfilerOptionsBuilder::with_wall_clock_millis].
+    /// [ProfilerOptionsBuilder::with_wall_clock_interval].
     ///
     /// [async-profiler `interval` option]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilerOptions.md#options-applicable-to-any-output-format
     ///
@@ -238,10 +238,11 @@ impl ProfilerOptionsBuilder {
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
     /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # use std::time::Duration;
     /// # fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default()
-    ///     .with_cpu_interval_nanos(10_000_000)
-    ///     .with_wall_clock_millis(100)
+    ///     .with_cpu_interval(Duration::from_millis(10))
+    ///     .with_wall_clock_interval(Duration::from_millis(100))
     ///     .build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
@@ -253,8 +254,8 @@ impl ProfilerOptionsBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_cpu_interval_nanos(mut self, cpu_interval_nanos: usize) -> Self {
-        self.cpu_interval = Some(cpu_interval_nanos);
+    pub fn with_cpu_interval(mut self, cpu_interval: Duration) -> Self {
+        self.cpu_interval = Some(cpu_interval.as_nanos());
         self
     }
 
@@ -283,10 +284,11 @@ impl ProfilerOptionsBuilder {
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
     /// # use async_profiler_agent::reporter::local::LocalReporter;
+    /// # use std::time::Duration;
     /// # fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default()
-    ///     .with_cpu_interval_nanos(10_000_000)
-    ///     .with_wall_clock_millis(100)
+    ///     .with_cpu_interval(Duration::from_millis(10))
+    ///     .with_wall_clock_interval(Duration::from_millis(10))
     ///     .build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
@@ -298,8 +300,8 @@ impl ProfilerOptionsBuilder {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn with_wall_clock_millis(mut self, wall_clock_millis: usize) -> Self {
-        self.wall_clock_millis = Some(wall_clock_millis);
+    pub fn with_wall_clock_interval(mut self, wall_clock: Duration) -> Self {
+        self.wall_clock_millis = Some(wall_clock.as_millis());
         self
     }
 
@@ -326,9 +328,13 @@ pub struct ProfilerBuilder {
 impl ProfilerBuilder {
     /// Sets the reporting interval (default: 30 seconds).
     ///
-    /// This is the interval that samples are *reported* at, and is unrelated
-    /// to the interval in which samples are *collected*. There are few
-    /// needs to change this from the default 30 seconds.
+    /// This is the interval that samples are *reported* to the backend,
+    /// and is unrelated to the interval at which the application
+    /// is *sampled* by async profiler, which is controlled by
+    /// [ProfilerOptionsBuilder::with_cpu_interval] and
+    /// [ProfilerOptionsBuilder::with_wall_clock_interval].
+    ///
+    /// Most users should not change this setting.
     ///
     /// ## Example
     ///
@@ -398,29 +404,42 @@ impl ProfilerBuilder {
     ///
     /// async-profiler Rust agent will by default try to fetch the metadata
     /// using [IMDS] when running on [Amazon EC2] or [Amazon Fargate], and
-    /// will error if it's unable to find it. If you are running the
+    /// will log if it's unable to find it. If you are running the
     /// async-profiler agent on any other form of compute,
     /// you will need to create and attach your own metadata
     /// by calling this function.
     ///
-    /// ## Example
-    ///
-    /// This will create a reporter with empty ([AgentMetadata::Other])
-    /// metadata.
-    ///
-    /// ```no_run
-    /// # use std::path::PathBuf;
-    /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
-    /// # use async_profiler_agent::metadata::AgentMetadata;
-    /// # let path = PathBuf::from(".");
-    /// let agent = ProfilerBuilder::default()
-    ///     .with_reporter(LocalReporter::new(path))
-    ///     .with_custom_agent_metadata(AgentMetadata::Other)
-    ///     .build()
-    ///     .spawn()?;
-    /// # Ok::<_, SpawnError>(())
-    /// ```
+    #[cfg_attr(feature="s3-no-defaults", doc="## Example")]
+    #[cfg_attr(feature="s3-no-defaults", doc="")]
+    #[cfg_attr(feature="s3-no-defaults", doc="This will create a reporter with empty ([AgentMetadata::Other])")]
+    #[cfg_attr(feature="s3-no-defaults", doc="metadata.")]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#""#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"```no_run"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use std::path::PathBuf;"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use async_profiler_agent::reporter::s3::{S3Reporter, S3ReporterConfig};"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use async_profiler_agent::metadata::AgentMetadata;"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use aws_config::BehaviorVersion;"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# #[tokio::main]"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# async fn main() -> Result<(), SpawnError> {"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# let path = PathBuf::from(".");"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"let bucket_owner = "<your account id>";"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"let bucket_name = "<your bucket name>";"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"let profiling_group = "a-name-to-give-the-uploaded-data";"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"let agent = ProfilerBuilder::default()"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"    .with_reporter(S3Reporter::new(S3ReporterConfig {"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"        sdk_config: &sdk_config,"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"        bucket_owner: bucket_owner.into(),"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"        bucket_name: bucket_name.into(),"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"        profiling_group_name: profiling_group.into(),"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"    }))"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"    .with_custom_agent_metadata(AgentMetadata::Other)"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"    .build()"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"    .spawn()?;"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# Ok::<_, SpawnError>(())"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"# }"#)]
+    #[cfg_attr(feature="s3-no-defaults", doc=r#"```"#)]
     ///
     /// [`reporter::s3::MetadataJson`]: crate::reporter::s3::MetadataJson
     /// [Amazon EC2]: https://aws.amazon.com/ec2
@@ -556,7 +575,7 @@ enum TickError {
 #[non_exhaustive]
 /// An error that happened spawning a profiler
 pub enum SpawnError {
-    /// Error internal to async-profiler
+    /// Error from async-profiler
     #[error(transparent)]
     AsProf(#[from] asprof::AsProfError),
     /// Error writing to a tempfile
@@ -566,9 +585,9 @@ pub enum SpawnError {
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
-/// An error that happened spawning a profiler
-pub enum SpawnThreadSimpleError {
-    /// Error internal to async-profiler
+/// An error from [`Profiler::spawn_thread`]
+pub enum SpawnThreadError {
+    /// Error from async-profiler
     #[error(transparent)]
     AsProf(#[from] SpawnError),
     /// Error constructing Tokio runtime
@@ -703,9 +722,9 @@ impl Profiler {
     ///
     /// ### Tokio Runtime
     ///
-    /// This function must be run within a Tokio runtime. If your application does
-    /// not have a `main` Tokio runtime, see
-    /// [Profiler::spawn_controllable_thread_to_runtime].
+    /// This function must be run within a Tokio runtime, otherwise it will panic. If
+    /// your application does not have a `main` Tokio runtime, see
+    /// [Profiler::spawn_thread].
     ///
     /// ### Example
     ///
@@ -810,16 +829,16 @@ impl Profiler {
     /// profiler.spawn_thread()?;
     /// # Ok::<_, anyhow::Error>(())
     /// ```
-    pub fn spawn_thread(self) -> Result<(), SpawnThreadSimpleError> {
+    pub fn spawn_thread(self) -> Result<(), SpawnThreadError> {
         // using "asprof" in thread name to deal with 15 character + \0 length limit
         let rt = tokio::runtime::Builder::new_current_thread()
             .thread_name("asprof-worker".to_owned())
             .enable_all()
             .build()
-            .map_err(SpawnThreadSimpleError::ConstructRt)?;
+            .map_err(SpawnThreadError::ConstructRt)?;
         let builder = std::thread::Builder::new().name("asprof-agent".to_owned());
         self.spawn_thread_to_runtime(rt, |t| builder.spawn(t).expect("thread name contains nuls"))
-            .map_err(SpawnThreadSimpleError::AsProf)
+            .map_err(SpawnThreadError::AsProf)
     }
 
     fn spawn_thread_inner<E: ProfilerEngine>(
@@ -850,8 +869,8 @@ impl Profiler {
     ///
     /// ### Tokio Runtime
     ///
-    /// This function must be run within a Tokio runtime. If your application does
-    /// not have a `main` Tokio runtime, see
+    /// This function must be run within a Tokio runtime, otherwise it will panic. If
+    /// your application does not have a `main` Tokio runtime, see
     /// [Profiler::spawn_controllable_thread_to_runtime].
     ///
     /// ### Example
@@ -1389,8 +1408,8 @@ mod tests {
     fn test_profiler_options_builder_all_options() {
         let opts = ProfilerOptionsBuilder::default()
             .with_native_mem_bytes(5000000)
-            .with_cpu_interval_nanos(1_000_000_000)
-            .with_wall_clock_millis(10_000)
+            .with_cpu_interval(Duration::from_secs(1))
+            .with_wall_clock_interval(Duration::from_secs(10))
             .build();
 
         let dummy_path = Path::new("/tmp/test.jfr");
