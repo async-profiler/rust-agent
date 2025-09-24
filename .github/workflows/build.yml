@@ -10,6 +10,7 @@ jobs:
         toolchain:
           - "1.86" # Current MSRV due to 1.85 having problems with the AWS SDK
           - stable
+          - nightly
         flags:
           - "--all-features"
           - "--no-default-features"

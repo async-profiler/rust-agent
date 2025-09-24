@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![deny(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_auto_cfg))]
 
 //! ## async-profiler Rust agent
 //! An in-process Rust agent for profiling an application using [async-profiler] and uploading the resulting profiles.

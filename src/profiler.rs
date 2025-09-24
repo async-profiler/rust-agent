@@ -271,7 +271,7 @@ impl ProfilerOptionsBuilder {
     ///
     /// The async-profiler agent collects both CPU time and wall-clock time
     /// samples, so this function should normally be used along with
-    /// [ProfilerOptionsBuilder::with_cpu_interval_nanos].
+    /// [ProfilerOptionsBuilder::with_cpu_interval].
     ///
     /// [async-profiler `wall` option]: https://github.com/async-profiler/async-profiler/blob/v4.0/docs/ProfilerOptions.md#options-applicable-to-any-output-format
     ///
