@@ -108,18 +108,18 @@ impl super::profiler::ProfilerEngine for AsProf {
         jfr_file_path: &Path,
         options: &ProfilerOptions,
     ) -> Result<(), self::AsProfError> {
-        tracing::debug!("starting the async-profiler and giving JFR file path: {jfr_file_path:?}");
+        tracing::debug!("starting profiling session and giving JFR file path: {jfr_file_path:?}");
 
         let args = options.to_args_string(jfr_file_path);
 
         Self::asprof_execute(&args)?;
-        tracing::debug!("async-profiler started successfully");
+        tracing::debug!("starting profiling session - success");
         Ok(())
     }
 
     fn stop_async_profiler() -> Result<(), self::AsProfError> {
         Self::asprof_execute("stop")?;
-        tracing::debug!("async-profiler stopped successfully");
+        tracing::debug!("stopping profiling session - success");
         Ok(())
     }
 }

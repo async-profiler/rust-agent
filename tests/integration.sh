@@ -13,7 +13,7 @@ mkdir -p $dir
 rm -f $dir/*.jfr
 
 # Pass --worker-threads 16 to make the test much less flaky since there is always some worker thread running
-./simple --local $dir --duration 30s --reporting-interval 10s --worker-threads 16 --native-mem 4k
+./simple --local $dir --duration 30s --reporting-interval 10s --worker-threads 16 --native-mem 4096
 
 found_good=0
 

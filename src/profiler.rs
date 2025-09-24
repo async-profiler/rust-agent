@@ -6,7 +6,7 @@
 use crate::{
     asprof::{self, AsProfError},
     metadata::{AgentMetadata, ReportMetadata},
-    reporter::Reporter,
+    reporter::{local::LocalReporter, Reporter},
 };
 use std::{
     fs::File,
@@ -363,6 +363,9 @@ impl ProfilerBuilder {
     #[cfg_attr(feature = "s3-no-defaults", doc = "[`S3Reporter`].")]
     /// It is also possible to write your own [`Reporter`].
     ///
+    /// It's normally easier to use [`LocalReporter`] directly via
+    /// [`ProfilerBuilder::with_local_reporter`].
+    ///
     /// If you want to output to multiple reporters, you can use
     /// [`MultiReporter`].
     ///
@@ -373,23 +376,113 @@ impl ProfilerBuilder {
         doc = "[`S3Reporter`]: crate::reporter::s3::S3Reporter"
     )]
     ///
+    #[cfg_attr(feature = "s3-no-defaults", doc = "## Example")]
+    #[cfg_attr(feature = "s3-no-defaults", doc = "")]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"```no_run"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# use std::path::PathBuf;"#)]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# use async_profiler_agent::reporter::s3::{S3Reporter, S3ReporterConfig};"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# use async_profiler_agent::metadata::AgentMetadata;"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# use aws_config::BehaviorVersion;"#
+    )]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# #[tokio::main]"#)]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# async fn main() -> Result<(), SpawnError> {"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# let path = PathBuf::from(".");"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let bucket_owner = "<your account id>";"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let bucket_name = "<your bucket name>";"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let profiling_group = "a-name-to-give-the-uploaded-data";"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let agent = ProfilerBuilder::default()"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"    .with_reporter(S3Reporter::new(S3ReporterConfig {"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"        sdk_config: &sdk_config,"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"        bucket_owner: bucket_owner.into(),"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"        bucket_name: bucket_name.into(),"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"        profiling_group_name: profiling_group.into(),"#
+    )]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    }))"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    .build()"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    .spawn()?;"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# Ok::<_, SpawnError>(())"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# }"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"```"#)]
+    pub fn with_reporter(mut self, r: impl Reporter + Send + Sync + 'static) -> ProfilerBuilder {
+        self.reporter = Some(Box::new(r));
+        self
+    }
+
+    /// Sets the profiler to ues [LocalReporter], which will write `.jfr` files to `path`,
+    /// and disables metadata auto-detection (see [`ProfilerBuilder::with_custom_agent_metadata`])
+    /// since the [LocalReporter] does not need that.
+    ///
+    /// This is useful for testing, since metadata auto-detection currently only works
+    /// on EC2 or Fargate instances.  The local reporter should normally not be used in
+    /// production, since it will not clean up JFR files.
+    ///
     /// ## Example
+    ///
+    /// This will write profiles as `.jfr` files to `./path-to-profiles`
     ///
     /// ```no_run
     /// # use std::path::PathBuf;
-    /// # use std::time::Duration;
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
     /// # use async_profiler_agent::reporter::local::LocalReporter;
-    /// # let path = PathBuf::from(".");
+    /// # use async_profiler_agent::metadata::AgentMetadata;
+    /// let path = PathBuf::from("./path-to-profiles");
     /// let agent = ProfilerBuilder::default()
-    ///     .with_reporter(LocalReporter::new(path))
+    ///     .with_local_reporter(path)
     ///     .build()
     ///     .spawn()?;
     /// # Ok::<_, SpawnError>(())
     /// ```
-    pub fn with_reporter(mut self, r: impl Reporter + Send + Sync + 'static) -> ProfilerBuilder {
-        self.reporter = Some(Box::new(r));
-        self
+    pub fn with_local_reporter(mut self, path: impl Into<PathBuf>) -> ProfilerBuilder {
+        self.reporter = Some(Box::new(LocalReporter::new(path.into())));
+        self.with_custom_agent_metadata(AgentMetadata::Other)
     }
 
     /// Provide custom agent metadata.
@@ -404,43 +497,96 @@ impl ProfilerBuilder {
     ///
     /// async-profiler Rust agent will by default try to fetch the metadata
     /// using [IMDS] when running on [Amazon EC2] or [Amazon Fargate], and
-    /// will log if it's unable to find it. If you are running the
+    /// will error if it's unable to find it. If you are running the
     /// async-profiler agent on any other form of compute,
     /// you will need to create and attach your own metadata
     /// by calling this function.
     ///
-    #[cfg_attr(feature="s3-no-defaults", doc="## Example")]
-    #[cfg_attr(feature="s3-no-defaults", doc="")]
-    #[cfg_attr(feature="s3-no-defaults", doc="This will create a reporter with empty ([AgentMetadata::Other])")]
-    #[cfg_attr(feature="s3-no-defaults", doc="metadata.")]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#""#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"```no_run"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use std::path::PathBuf;"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use async_profiler_agent::reporter::s3::{S3Reporter, S3ReporterConfig};"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use async_profiler_agent::metadata::AgentMetadata;"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# use aws_config::BehaviorVersion;"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# #[tokio::main]"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# async fn main() -> Result<(), SpawnError> {"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# let path = PathBuf::from(".");"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"let bucket_owner = "<your account id>";"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"let bucket_name = "<your bucket name>";"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"let profiling_group = "a-name-to-give-the-uploaded-data";"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"let agent = ProfilerBuilder::default()"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"    .with_reporter(S3Reporter::new(S3ReporterConfig {"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"        sdk_config: &sdk_config,"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"        bucket_owner: bucket_owner.into(),"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"        bucket_name: bucket_name.into(),"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"        profiling_group_name: profiling_group.into(),"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"    }))"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"    .with_custom_agent_metadata(AgentMetadata::Other)"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"    .build()"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"    .spawn()?;"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# Ok::<_, SpawnError>(())"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"# }"#)]
-    #[cfg_attr(feature="s3-no-defaults", doc=r#"```"#)]
-    ///
+    #[cfg_attr(feature = "s3-no-defaults", doc = "## Example")]
+    #[cfg_attr(feature = "s3-no-defaults", doc = "")]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = "This will create a reporter with empty ([AgentMetadata::Other])"
+    )]
+    #[cfg_attr(feature = "s3-no-defaults", doc = "metadata.")]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#""#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"```no_run"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# use std::path::PathBuf;"#)]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# use async_profiler_agent::reporter::s3::{S3Reporter, S3ReporterConfig};"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# use async_profiler_agent::metadata::AgentMetadata;"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# use aws_config::BehaviorVersion;"#
+    )]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# #[tokio::main]"#)]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# async fn main() -> Result<(), SpawnError> {"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"# let path = PathBuf::from(".");"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let bucket_owner = "<your account id>";"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let bucket_name = "<your bucket name>";"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let profiling_group = "a-name-to-give-the-uploaded-data";"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"let agent = ProfilerBuilder::default()"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"    .with_reporter(S3Reporter::new(S3ReporterConfig {"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"        sdk_config: &sdk_config,"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"        bucket_owner: bucket_owner.into(),"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"        bucket_name: bucket_name.into(),"#
+    )]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"        profiling_group_name: profiling_group.into(),"#
+    )]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    }))"#)]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = r#"    .with_custom_agent_metadata(AgentMetadata::Other)"#
+    )]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    .build()"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    .spawn()?;"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# Ok::<_, SpawnError>(())"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# }"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = r#"```"#)]
     /// [`reporter::s3::MetadataJson`]: crate::reporter::s3::MetadataJson
     /// [Amazon EC2]: https://aws.amazon.com/ec2
     /// [Amazon Fargate]: https://aws.amazon.com/fargate
@@ -643,6 +789,8 @@ impl RunningProfiler {
         self.detach_inner();
     }
 
+    /// Spawns this [RunningProfiler] into a separate thread within a new Tokio runtime,
+    /// and returns a [RunningProfilerThread] attached to it.
     fn spawn_attached(
         self,
         runtime: tokio::runtime::Runtime,
@@ -656,6 +804,8 @@ impl RunningProfiler {
         }
     }
 
+    /// Spawns this [RunningProfiler] into a separate thread within a new Tokio runtime,
+    /// and detaches it.
     fn spawn_detached(
         self,
         runtime: tokio::runtime::Runtime,
@@ -761,7 +911,7 @@ impl Profiler {
     /// [Profiler::spawn_controllable_thread_to_runtime].
     ///
     /// `spawn_fn` should be [`std::thread::spawn`], or some function that behaves like it (to
-    /// allow for configuring thread properties).
+    /// allow for configuring thread properties, for example thread names).
     ///
     /// This is to be used when your program does not have a "main" Tokio runtime already set up.
     ///
@@ -783,7 +933,13 @@ impl Profiler {
     ///    .build();
     ///
     /// profiler.spawn_thread_to_runtime(
-    ///     rt, std::thread::spawn
+    ///     rt,
+    ///     |t| {
+    ///         std::thread::Builder::new()
+    ///             .name("asprof-agent".to_owned())
+    ///             .spawn(t)
+    ///             .expect("thread name contains nuls")
+    ///     }
     /// )?;
     /// # Ok::<_, anyhow::Error>(())
     /// ```
@@ -915,7 +1071,7 @@ impl Profiler {
     /// [tokio::runtime::Runtime::block_on] on that runtime.
     ///
     /// `spawn_fn` should be [`std::thread::spawn`], or some function that behaves like it (to
-    /// allow for configuring thread properties).
+    /// allow for configuring thread properties, for example thread names).
     ///
     /// This is to be used when your program does not have a "main" Tokio runtime already set up.
     ///
@@ -937,12 +1093,18 @@ impl Profiler {
     ///    .build();
     ///
     /// let profiler = profiler.spawn_controllable_thread_to_runtime(
-    ///     rt, std::thread::spawn
+    ///     rt,
+    ///     |t| {
+    ///         std::thread::Builder::new()
+    ///             .name("asprof-agent".to_owned())
+    ///             .spawn(t)
+    ///             .expect("thread name contains nuls")
+    ///     }
     /// )?;
     ///
     /// # fn got_request_to_disable_profiling() -> bool { false }
     /// // spawn a task that will disable profiling if requested
-    /// std::thread::spawn(move|| {
+    /// std::thread::spawn(move || {
     ///     if got_request_to_disable_profiling() {
     ///         profiler.stop();
     ///     }
@@ -1415,5 +1577,19 @@ mod tests {
         let dummy_path = Path::new("/tmp/test.jfr");
         let args = opts.to_args_string(dummy_path);
         assert_eq!(args, "start,event=cpu,interval=1000000000,wall=10000ms,jfr,cstack=dwarf,file=/tmp/test.jfr,nativemem=5000000");
+    }
+
+    #[test]
+    fn test_local_reporter_has_no_metadata() {
+        // Check that with_local_reporter sets some configuration
+        let reporter = ProfilerBuilder::default().with_local_reporter(".");
+        assert_eq!(
+            format!("{:?}", reporter.reporter),
+            r#"Some(LocalReporter { directory: "." })"#
+        );
+        match reporter.agent_metadata {
+            Some(AgentMetadata::Other) => {}
+            bad => panic!("{bad:?}"),
+        };
     }
 }
