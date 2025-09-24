@@ -455,8 +455,14 @@ impl ProfilerBuilder {
     /// since the [LocalReporter] does not need that.
     ///
     /// This is useful for testing, since metadata auto-detection currently only works
-    /// on EC2 or Fargate instances.  The local reporter should normally not be used in
-    /// production, since it will not clean up JFR files.
+    /// on [Amazon EC2] or [Amazon Fargate] instances.
+    ///
+    /// The local reporter should normally not be used in production, since it will
+    /// not clean up JFR files. Instead, you can use a pre-existing [`Reporter`]
+    /// or write your own (see [`ProfilerBuilder::with_reporter`]).
+    ///
+    /// [Amazon EC2]: https://aws.amazon.com/ec2
+    /// [Amazon Fargate]: https://aws.amazon.com/fargate
     ///
     /// ## Example
     ///
