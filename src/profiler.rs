@@ -139,12 +139,11 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// # fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem("10m".into()).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
-    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
     /// profiler.spawn()?;
@@ -174,12 +173,11 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// # fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem_bytes(10_000_000).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
-    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
     /// profiler.spawn()?;
@@ -192,12 +190,11 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// # fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem_bytes(0).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
-    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
     /// profiler.spawn()?;
@@ -237,7 +234,6 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// # use std::time::Duration;
     /// # fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default()
@@ -246,7 +242,7 @@ impl ProfilerOptionsBuilder {
     ///     .build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
-    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
     /// profiler.spawn()?;
@@ -283,7 +279,6 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// # use std::time::Duration;
     /// # fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default()
@@ -292,7 +287,7 @@ impl ProfilerOptionsBuilder {
     ///     .build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
-    ///     .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
     /// profiler.spawn()?;
@@ -342,10 +337,9 @@ impl ProfilerBuilder {
     /// # use std::path::PathBuf;
     /// # use std::time::Duration;
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// # let path = PathBuf::from(".");
     /// let agent = ProfilerBuilder::default()
-    ///     .with_reporter(LocalReporter::new(path))
+    ///     .with_local_reporter(path)
     ///     .with_reporting_interval(Duration::from_secs(15))
     ///     .build()
     ///     .spawn()?;
@@ -466,7 +460,7 @@ impl ProfilerBuilder {
     ///
     /// ## Example
     ///
-    /// This will write profiles as `.jfr` files to `./path-to-profiles`
+    /// This will write profiles as `.jfr` files to `./path-to-profiles`:
     ///
     /// ```no_run
     /// # use std::path::PathBuf;
@@ -506,9 +500,12 @@ impl ProfilerBuilder {
     #[cfg_attr(feature = "s3-no-defaults", doc = "")]
     #[cfg_attr(
         feature = "s3-no-defaults",
-        doc = "This will create a reporter with empty ([AgentMetadata::Other])"
+        doc = "This will create a profiler that will upload to S3 with"
     )]
-    #[cfg_attr(feature = "s3-no-defaults", doc = "metadata.")]
+    #[cfg_attr(
+        feature = "s3-no-defaults",
+        doc = "empty ([AgentMetadata::Other]) metadata."
+    )]
     #[cfg_attr(feature = "s3-no-defaults", doc = r#""#)]
     #[cfg_attr(feature = "s3-no-defaults", doc = r#"```no_run"#)]
     #[cfg_attr(feature = "s3-no-defaults", doc = r#"# use std::path::PathBuf;"#)]
@@ -597,6 +594,26 @@ impl ProfilerBuilder {
     }
 
     /// Provide custom profiler options.
+    ///
+    /// ### Example
+    ///
+    /// This will sample allocations for every 10 megabytes allocated:
+    ///
+    /// ```
+    /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # fn main() -> Result<(), SpawnError> {
+    /// let opts = ProfilerOptionsBuilder::default().with_native_mem("10m".into()).build();
+    /// let profiler = ProfilerBuilder::default()
+    ///     .with_profiler_options(opts)
+    ///     .with_local_reporter("/tmp/profiles")
+    ///     .build();
+    /// # if false { // don't spawn the profiler in doctests
+    /// profiler.spawn()?;
+    /// # }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn with_profiler_options(mut self, c: ProfilerOptions) -> ProfilerBuilder {
         self.profiler_options = Some(c);
         self
@@ -878,18 +895,15 @@ impl Profiler {
     ///
     /// ### Example
     ///
-    /// This example uses a [LocalReporter] which reports the profiles to
-    /// a directory. It works with any other [Reporter].
-    ///
-    /// [LocalReporter]: crate::reporter::local::LocalReporter
+    /// This example uses [ProfilerBuilder::with_local_reporter] which reports the profiles to
+    /// a directory. It works with any other [Reporter] using [ProfilerBuilder::with_reporter].
     ///
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), SpawnError> {
     /// let profiler = ProfilerBuilder::default()
-    ///    .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///    .with_local_reporter("/tmp/profiles")
     ///    .build();
     /// # if false { // don't spawn the profiler in doctests
     /// profiler.spawn()?;
@@ -917,19 +931,16 @@ impl Profiler {
     ///
     /// ### Example
     ///
-    /// This example uses a [LocalReporter] which reports the profiles to
-    /// a directory. It works with any other [Reporter].
-    ///
-    /// [LocalReporter]: crate::reporter::local::LocalReporter
+    /// This example uses [ProfilerBuilder::with_local_reporter] which reports the profiles to
+    /// a directory. It works with any other [Reporter] using [ProfilerBuilder::with_reporter].
     ///
     /// ```no_run
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// let rt = tokio::runtime::Builder::new_current_thread()
     ///     .enable_all()
     ///     .build()?;
     /// let profiler = ProfilerBuilder::default()
-    ///    .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///    .with_local_reporter("/tmp/profiles")
     ///    .build();
     ///
     /// profiler.spawn_thread_to_runtime(
@@ -970,16 +981,14 @@ impl Profiler {
     ///
     /// ### Example
     ///
-    /// This example uses a [LocalReporter] which reports the profiles to
-    /// a directory. It works with any other [Reporter].
-    ///
-    /// [LocalReporter]: crate::reporter::local::LocalReporter
+    /// This example uses [ProfilerBuilder::with_local_reporter] which reports the profiles to
+    /// a directory. It works with any other [Reporter] using [ProfilerBuilder::with_reporter].
     ///
     /// ```no_run
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
     /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// let profiler = ProfilerBuilder::default()
-    ///    .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///    .with_local_reporter("/tmp/profiles")
     ///    .build();
     ///
     /// profiler.spawn_thread()?;
@@ -1031,18 +1040,15 @@ impl Profiler {
     ///
     /// ### Example
     ///
-    /// This example uses a [LocalReporter] which reports the profiles to
-    /// a directory. It works with any other [Reporter].
-    ///
-    /// [LocalReporter]: crate::reporter::local::LocalReporter
+    /// This example uses [ProfilerBuilder::with_local_reporter] which reports the profiles to
+    /// a directory. It works with any other [Reporter] using [ProfilerBuilder::with_reporter].
     ///
     /// ```no_run
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// # #[tokio::main]
     /// # async fn main() -> Result<(), SpawnError> {
     /// let profiler = ProfilerBuilder::default()
-    ///    .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///    .with_local_reporter("/tmp/profiles")
     ///    .build();
     ///
     /// let profiler = profiler.spawn_controllable()?;
@@ -1077,19 +1083,16 @@ impl Profiler {
     ///
     /// ### Example
     ///
-    /// This example uses a [LocalReporter] which reports the profiles to
-    /// a directory. It works with any other [Reporter].
-    ///
-    /// [LocalReporter]: crate::reporter::local::LocalReporter
+    /// This example uses [ProfilerBuilder::with_local_reporter] which reports the profiles to
+    /// a directory. It works with any other [Reporter] using [ProfilerBuilder::with_reporter].
     ///
     /// ```no_run
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
-    /// # use async_profiler_agent::reporter::local::LocalReporter;
     /// let rt = tokio::runtime::Builder::new_current_thread()
     ///     .enable_all()
     ///     .build()?;
     /// let profiler = ProfilerBuilder::default()
-    ///    .with_reporter(LocalReporter::new("/tmp/profiles"))
+    ///    .with_local_reporter("/tmp/profiles")
     ///    .build();
     ///
     /// let profiler = profiler.spawn_controllable_thread_to_runtime(

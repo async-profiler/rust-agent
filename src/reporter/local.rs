@@ -35,12 +35,10 @@ enum LocalReporterError {
 /// ```
 /// # use async_profiler_agent::metadata::AgentMetadata;
 /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
-/// # use async_profiler_agent::reporter::local::LocalReporter;
 /// # #[tokio::main]
 /// # async fn main() -> Result<(), SpawnError> {
 /// let profiler = ProfilerBuilder::default()
-///    .with_reporter(LocalReporter::new("/tmp/profiles"))
-///    .with_custom_agent_metadata(AgentMetadata::Other)
+///    .with_local_reporter("/tmp/profiles")
 ///    .build();
 /// # if false { // don't spawn the profiler in doctests
 /// profiler.spawn()?;
