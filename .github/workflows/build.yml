@@ -10,6 +10,7 @@ jobs:
         toolchain:
           - "1.86" # Current MSRV due to 1.85 having problems with the AWS SDK
           - stable
+          - nightly
         flags:
           - "--all-features"
           - "--no-default-features"
@@ -92,4 +93,4 @@ jobs:
       - name: Run integration test
         shell: bash
         working-directory: tests
-        run: chmod +x simple pollcatch-decoder && LD_LIBRARY_PATH=$PWD ./integration.sh
+        run: chmod +x simple pollcatch-decoder && LD_LIBRARY_PATH=$PWD ./integration.sh && LD_LIBRARY_PATH=$PWD ./separate_runtime_integration.sh

@@ -22,6 +22,30 @@ enum LocalReporterError {
 /// A reporter that reports into a directory.
 ///
 /// The files are reported with the filename `yyyy-mm-ddTHH-MM-SSZ.jfr`
+///
+/// It does not currently use the metadata, so if you are using
+/// [LocalReporter] alone, rather than inside a [MultiReporter], you
+/// can just use [AgentMetadata::NoMetadata] as metadata.
+///
+/// [AgentMetadata::NoMetadata]: crate::metadata::AgentMetadata::NoMetadata
+/// [MultiReporter]: crate::reporter::multi::MultiReporter
+///
+/// ### Example
+///
+/// ```
+/// # use async_profiler_agent::metadata::AgentMetadata;
+/// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), SpawnError> {
+/// let profiler = ProfilerBuilder::default()
+///    .with_local_reporter("/tmp/profiles")
+///    .build();
+/// # if false { // don't spawn the profiler in doctests
+/// profiler.spawn()?;
+/// # }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug)]
 pub struct LocalReporter {
     directory: PathBuf,

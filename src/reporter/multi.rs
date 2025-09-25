@@ -34,6 +34,47 @@ impl fmt::Display for MultiError {
 /// A reporter that reports profiling results to several destinations.
 ///
 /// If one of the destinations errors, it will continue reporting to the other ones.
+///
+/// ## Example
+///
+/// Output to both S3 and a local directory:
+///
+#[cfg_attr(feature = "s3-no-defaults", doc = "```no_run")]
+#[cfg_attr(not(feature = "s3-no-defaults"), doc = "```compile_fail")]
+/// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
+/// # use async_profiler_agent::reporter::Reporter;
+/// # use async_profiler_agent::reporter::local::LocalReporter;
+/// # use async_profiler_agent::reporter::multi::MultiReporter;
+/// # use async_profiler_agent::reporter::s3::{S3Reporter, S3ReporterConfig};
+/// # use aws_config::BehaviorVersion;
+/// # use std::path::PathBuf;
+/// #
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), SpawnError> {
+/// let bucket_owner = "<your account id>";
+/// let bucket_name = "<your bucket name>";
+/// let profiling_group = "a-name-to-give-the-uploaded-data";
+/// let path = PathBuf::from("path/to/write/jfrs");
+///
+/// let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;
+///
+/// let reporter = MultiReporter::new(vec![
+///     Box::new(LocalReporter::new(path)),
+///     Box::new(S3Reporter::new(S3ReporterConfig {
+///        sdk_config: &sdk_config,
+///        bucket_owner: bucket_owner.into(),
+///        bucket_name: bucket_name.into(),
+///        profiling_group_name: profiling_group.into(),
+///     })),
+/// ]);
+/// let profiler = ProfilerBuilder::default()
+///    .with_reporter(reporter)
+///    .build();
+///
+/// profiler.spawn()?;
+/// # Ok(())
+/// # }
+/// ```
 pub struct MultiReporter {
     reporters: Vec<Box<dyn Reporter + Send + Sync>>,
 }

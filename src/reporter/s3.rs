@@ -145,7 +145,9 @@ fn make_s3_file_name(
             let task_arn = ecs_task_arn.replace("/", "-").replace("_", "-");
             format!("ecs_{task_arn}_")
         }
+        #[allow(deprecated)]
         AgentMetadata::Other => "onprem__".to_string(),
+        AgentMetadata::NoMetadata => "unknown__".to_string(),
     };
     let time: chrono::DateTime<chrono::Utc> = time.into();
     let time = time
@@ -252,7 +254,8 @@ mod test {
         );
     }
 
-    #[test_case(AgentMetadata::Other, "profile_pg_onprem___<pid>_<time>.zip"; "other")]
+    #[test_case(#[allow(deprecated)] { AgentMetadata::Other }, "profile_pg_onprem___<pid>_<time>.zip"; "other")]
+    #[test_case(AgentMetadata::NoMetadata, "profile_pg_unknown___<pid>_<time>.zip"; "no-metadata")]
     #[test_case(AgentMetadata::Ec2AgentMetadata {
         aws_account_id: "1".into(),
         aws_region_id: "us-east-1".into(),
