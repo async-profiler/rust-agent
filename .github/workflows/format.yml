@@ -27,6 +27,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install clippy
+        shell: bash
+        run: rustup component add clippy
       - name: Run clippy check
         id: cargoClippy
         shell: bash
@@ -40,6 +43,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-directories: decoder
+      - name: Install clippy
+        shell: bash
+        run: rustup component add clippy
       - name: Run clippy check - decoder
         id: cargoClippyDecoder
         shell: bash
