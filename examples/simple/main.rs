@@ -119,7 +119,7 @@ async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
     let profiler = match (&args.local, args.s3_bucket_args()) {
         (Some(local), S3BucketArgs { .. }) => profiler
             .with_reporter(LocalReporter::new(local))
-            .with_custom_agent_metadata(AgentMetadata::Other),
+            .with_custom_agent_metadata(AgentMetadata::NoMetadata),
         #[cfg(feature = "s3-no-defaults")]
         (
             _,

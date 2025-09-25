@@ -76,6 +76,35 @@ The metadata is not used by the agent directly, and only provided to the reporte
 [Fargate]: https://aws.amazon.com/fargate
 [IMDS]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
 
+### What information the profiler gathers
+
+Memory samples (JFR `profiler.Malloc`) sample allocated memory every
+so many bytes of allocated memory, and are matched by `profiler.Free`
+to allow detecting if that memory is not free'd.
+
+CPU-time samples (JFR `jdk.ExecutionSample`) sample only threads that
+are currently running on a CPU, not threads that are sleeping.
+
+Wall-clock samples (JFR `profiler.WallClockSample`) sample threads
+whether they are sleeping or running, and can therefore be
+very useful for finding threads that are blocked, for example
+on a synchronous lock or a slow system call.
+
+When using Tokio, since tasks are not threads, tasks that are not
+currently running will not be sampled by a wall clock sample. However,
+a wall clock sample is still very useful in Tokio, since it is what
+you want to catch tasks that are blocking a thread by waiting on
+synchronous operations.
+
+The default is to do a wall-clock sample every second, and a CPU-time
+sample every 100 CPU milliseconds. This can be configured via
+[`ProfilerOptionsBuilder`].
+
+Memory samples are not enabled by default, but can be enabled by [`with_native_mem_bytes`].
+
+[`ProfilerOptionsBuilder`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.ProfilerOptionsBuilder.html
+[`with_native_mem_bytes`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.ProfilerOptionsBuilder.html#method.with_native_mem_bytes
+
 ### PollCatch
 
 If you want to find long poll times, and you have `RUSTFLAGS="--cfg tokio_unstable"`, you can

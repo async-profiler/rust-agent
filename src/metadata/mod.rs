@@ -6,7 +6,7 @@
 pub use std::time::Duration;
 
 /// Host Metadata, which describes a host that runs a profiling agent. The current set of supported agent metadata is
-/// AWS-specific. If you are not running on AWS, you can use [AgentMetadata::Other].
+/// AWS-specific. If you are not running on AWS, you can use [AgentMetadata::NoMetadata].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AgentMetadata {
@@ -43,7 +43,11 @@ pub enum AgentMetadata {
         ecs_cluster_arn: String,
     },
     /// Metadata for a host that is neither an EC2 nor a Fargate
+    #[deprecated = "Use AgentMetadata::NoMetadata"]
     Other,
+    /// A placeholder when a host has no metadata, or when a reporter does not
+    /// use metadata.
+    NoMetadata,
 }
 
 /// Metadata associated with a specific individual profiling report
@@ -66,7 +70,7 @@ pub mod aws;
 /// [private] dummy metadata to make testing easier
 #[cfg(test)]
 pub(crate) const DUMMY_METADATA: ReportMetadata<'static> = ReportMetadata {
-    instance: &AgentMetadata::Other,
+    instance: &AgentMetadata::NoMetadata,
     start: Duration::from_secs(1),
     end: Duration::from_secs(2),
     reporting_interval: Duration::from_secs(1),

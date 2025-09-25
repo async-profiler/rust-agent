@@ -25,9 +25,9 @@ enum LocalReporterError {
 ///
 /// It does not currently use the metadata, so if you are using
 /// [LocalReporter] alone, rather than inside a [MultiReporter], you
-/// can just use [AgentMetadata::Other] as metadata.
+/// can just use [AgentMetadata::NoMetadata] as metadata.
 ///
-/// [AgentMetadata::Other]: crate::metadata::AgentMetadata::Other
+/// [AgentMetadata::NoMetadata]: crate::metadata::AgentMetadata::NoMetadata
 /// [MultiReporter]: crate::reporter::multi::MultiReporter
 ///
 /// ### Example

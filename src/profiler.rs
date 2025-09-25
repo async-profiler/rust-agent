@@ -207,7 +207,7 @@ impl ProfilerOptionsBuilder {
         self
     }
 
-    /// Sets the interva in which the profiler will collect
+    /// Sets the interval in which the profiler will collect
     /// CPU-time samples, via the [async-profiler `interval` option].
     ///
     /// CPU-time samples (JFR `jdk.ExecutionSample`) sample only threads that
@@ -261,7 +261,13 @@ impl ProfilerOptionsBuilder {
     /// Wall-clock samples (JFR `profiler.WallClockSample`) sample threads
     /// whether they are sleeping or running, and can therefore be
     /// very useful for finding threads that are blocked, for example
-    /// on a synchronous lock.
+    /// on a synchronous lock or a slow system call.
+    ///
+    /// When using Tokio, since tasks are not threads, tasks that are not
+    /// currently running will not be sampled by a wall clock sample. However,
+    /// a wall clock sample is still very useful in Tokio, since it is what
+    /// you want to catch tasks that are blocking a thread by waiting on
+    /// synchronous operations.
     ///
     /// The default is to do a wall-clock sample every second.
     ///
@@ -370,81 +376,7 @@ impl ProfilerBuilder {
         doc = "[`S3Reporter`]: crate::reporter::s3::S3Reporter"
     )]
     ///
-    #[cfg_attr(feature = "s3-no-defaults", doc = "## Example")]
-    #[cfg_attr(feature = "s3-no-defaults", doc = "")]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"```no_run"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# use std::path::PathBuf;"#)]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# use async_profiler_agent::reporter::s3::{S3Reporter, S3ReporterConfig};"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# use async_profiler_agent::metadata::AgentMetadata;"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# use aws_config::BehaviorVersion;"#
-    )]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# #[tokio::main]"#)]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# async fn main() -> Result<(), SpawnError> {"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# let path = PathBuf::from(".");"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let bucket_owner = "<your account id>";"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let bucket_name = "<your bucket name>";"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let profiling_group = "a-name-to-give-the-uploaded-data";"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let agent = ProfilerBuilder::default()"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"    .with_reporter(S3Reporter::new(S3ReporterConfig {"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"        sdk_config: &sdk_config,"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"        bucket_owner: bucket_owner.into(),"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"        bucket_name: bucket_name.into(),"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"        profiling_group_name: profiling_group.into(),"#
-    )]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    }))"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    .build()"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    .spawn()?;"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# Ok::<_, SpawnError>(())"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# }"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"```"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = include_str!("s3-example.md"))]
     pub fn with_reporter(mut self, r: impl Reporter + Send + Sync + 'static) -> ProfilerBuilder {
         self.reporter = Some(Box::new(r));
         self
@@ -482,7 +414,7 @@ impl ProfilerBuilder {
     /// ```
     pub fn with_local_reporter(mut self, path: impl Into<PathBuf>) -> ProfilerBuilder {
         self.reporter = Some(Box::new(LocalReporter::new(path.into())));
-        self.with_custom_agent_metadata(AgentMetadata::Other)
+        self.with_custom_agent_metadata(AgentMetadata::NoMetadata)
     }
 
     /// Provide custom agent metadata.
@@ -502,94 +434,7 @@ impl ProfilerBuilder {
     /// you will need to create and attach your own metadata
     /// by calling this function.
     ///
-    #[cfg_attr(feature = "s3-no-defaults", doc = "## Example")]
-    #[cfg_attr(feature = "s3-no-defaults", doc = "")]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = "This will create a profiler that will upload to S3 with"
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = "empty ([AgentMetadata::Other]) metadata."
-    )]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#""#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"```no_run"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# use std::path::PathBuf;"#)]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# use async_profiler_agent::reporter::s3::{S3Reporter, S3ReporterConfig};"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# use async_profiler_agent::metadata::AgentMetadata;"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# use aws_config::BehaviorVersion;"#
-    )]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# #[tokio::main]"#)]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# async fn main() -> Result<(), SpawnError> {"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"# let path = PathBuf::from(".");"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let bucket_owner = "<your account id>";"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let bucket_name = "<your bucket name>";"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let profiling_group = "a-name-to-give-the-uploaded-data";"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"let agent = ProfilerBuilder::default()"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"    .with_reporter(S3Reporter::new(S3ReporterConfig {"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"        sdk_config: &sdk_config,"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"        bucket_owner: bucket_owner.into(),"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"        bucket_name: bucket_name.into(),"#
-    )]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"        profiling_group_name: profiling_group.into(),"#
-    )]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    }))"#)]
-    #[cfg_attr(
-        feature = "s3-no-defaults",
-        doc = r#"    .with_custom_agent_metadata(AgentMetadata::Other)"#
-    )]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    .build()"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"    .spawn()?;"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# Ok::<_, SpawnError>(())"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"# }"#)]
-    #[cfg_attr(feature = "s3-no-defaults", doc = r#"```"#)]
+    #[cfg_attr(feature = "s3-no-defaults", doc = include_str!("s3-example-custom-metadata.md"))]
     /// [`reporter::s3::MetadataJson`]: crate::reporter::s3::MetadataJson
     /// [Amazon EC2]: https://aws.amazon.com/ec2
     /// [Amazon Fargate]: https://aws.amazon.com/fargate
@@ -871,6 +716,33 @@ impl RunningProfilerThread {
 
 /// Rust profiler based on [async-profiler].
 ///
+/// Spawning a profiler can be done either in an attached (controllable)
+/// mode, which allows for stopping the profiler (and, in fact, stops
+/// it when the relevant handle is dropped), or in detached mode,
+/// in which the profiler keeps running forever. Applications that can
+/// shut down the profiler at run-time, for example applications that
+/// support reconfiguration of a running profiler, generally want to use
+/// controllable mode. Other applications (most of them) should use
+/// detached mode.
+///
+/// In addition, the profiler can either be spawned into the current Tokio
+/// runtime, or into a new one. Normally, applications should spawn
+/// the profiler into their own Tokio runtime, but applications that
+/// don't have a default Tokio runtime should spawn it into a
+/// different one
+///
+/// This leaves 4 functions:
+/// 1. [Self::spawn] - detached, same runtime
+/// 2. [Self::spawn_thread_to_runtime] - detached, different runtime
+/// 3. [Self::spawn_controllable] - controllable, same runtime
+/// 4. [Self::spawn_controllable_thread_to_runtime] - controllable, different runtime
+///
+/// In addition, there's a helper function that just spawns the profiler
+/// to a new runtime in a new thread, for applications that don't have
+/// a Tokio runtime and don't need complex control:
+///
+/// 5. [Self::spawn_thread] - detached, new runtime in a new thread
+///
 /// [async-profiler]: https://github.com/async-profiler/async-profiler
 pub struct Profiler {
     reporting_interval: Duration,
@@ -923,7 +795,7 @@ impl Profiler {
 
     /// Like [Self::spawn], but instead of spawning within the current Tokio
     /// runtime, spawns within a set Tokio runtime and then runs a thread that calls
-    /// [tokio::runtime::Runtime::block_on] on that runtime.
+    /// [block_on](tokio::runtime::Runtime::block_on) on that runtime.
     ///
     /// If your configuration is standard, use [Profiler::spawn_thread].
     ///
@@ -970,7 +842,7 @@ impl Profiler {
 
     /// Like [Self::spawn], but instead of spawning within the current Tokio
     /// runtime, spawns within a new Tokio runtime and then runs a thread that calls
-    /// [tokio::runtime::Runtime::block_on] on that runtime, setting up the runtime
+    /// [block_on](tokio::runtime::Runtime::block_on) on that runtime, setting up the runtime
     /// by itself.
     ///
     /// If your configuration is less standard, use [Profiler::spawn_thread_to_runtime]. Calling
@@ -1080,7 +952,7 @@ impl Profiler {
 
     /// Like [Self::spawn_controllable], but instead of spawning within the current Tokio
     /// runtime, spawns within a set Tokio runtime and then runs a thread that calls
-    /// [tokio::runtime::Runtime::block_on] on that runtime.
+    /// [block_on](tokio::runtime::Runtime::block_on) on that runtime.
     ///
     /// `spawn_fn` should be [`std::thread::spawn`], or some function that behaves like it (to
     /// allow for configuring thread properties, for example thread names).
@@ -1243,7 +1115,7 @@ async fn profiler_tick<E: ProfilerEngine>(
         #[cfg(feature = "aws-metadata-no-defaults")]
         let md = crate::metadata::aws::load_agent_metadata().await?;
         #[cfg(not(feature = "aws-metadata-no-defaults"))]
-        let md = crate::metadata::AgentMetadata::Other;
+        let md = crate::metadata::AgentMetadata::NoMetadata;
         tracing::debug!("loaded metadata");
         agent_metadata.replace(md);
     }
@@ -1597,7 +1469,7 @@ mod tests {
             r#"Some(LocalReporter { directory: "." })"#
         );
         match reporter.agent_metadata {
-            Some(AgentMetadata::Other) => {}
+            Some(AgentMetadata::NoMetadata) => {}
             bad => panic!("{bad:?}"),
         };
     }
