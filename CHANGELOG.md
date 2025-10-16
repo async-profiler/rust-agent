@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.9](https://github.com/async-profiler/rust-agent/compare/v0.1.8...v0.1.9) - 2025-10-16
+
+### Added
+
+- allow running async-profiler agent in its own Tokio runtime (#97)
+- allow configuring the profiling intervals (#97)
+
+### Docs
+
+- Improve documentation (#87, #97)
+
+### CI
+
+- test against an upstream async-profiler release, instead of compiling our own (#86)
+
+### Breaking changes
+
+- update MSRV to 1.86, due to AWS SDK problems with 1.85
+
+### Other
 ## [0.1.8](https://github.com/async-profiler/rust-agent/compare/v0.1.7...v0.1.8) - 2025-07-14
 
 ### Added
