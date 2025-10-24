@@ -32,10 +32,9 @@ impl JfrFile {
 
     #[cfg(not(target_os = "linux"))]
     fn new() -> Result<Self, io::Error> {
-        io::Error::new(
-            io::ErrorKind::Other,
+        Err(io::Error::other(
             "async-profiler is only supported on Linux",
-        )
+        ))
     }
 
     fn swap(&mut self) {
