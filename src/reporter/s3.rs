@@ -141,6 +141,7 @@ fn make_s3_file_name(
             aws_region_id: _,
             ecs_task_arn,
             ecs_cluster_arn: _,
+            ..
         } => {
             let task_arn = ecs_task_arn.replace("/", "-").replace("_", "-");
             format!("ecs_{task_arn}_")
@@ -265,7 +266,9 @@ mod test {
         aws_account_id: "1".into(),
         aws_region_id: "us-east-1".into(),
         ecs_task_arn: "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f".into(),
-        ecs_cluster_arn: "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster".into()
+        ecs_cluster_arn: "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster".into(),
+        task_cpu: 0.25,
+        task_memory: 2048,
     }, "profile_pg_ecs_arn:aws:ecs:us-east-1:123456789012:task-profiler-metadata-cluster-5261e761e0e2a3d92da3f02c8e5bab1f__<pid>_<time>.zip"; "ecs")]
     fn test_make_s3_file_name(metadata: AgentMetadata, expected: &str) {
         let file_name = super::make_s3_file_name(&metadata, "pg", SystemTime::UNIX_EPOCH);

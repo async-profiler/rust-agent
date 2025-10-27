@@ -7,7 +7,7 @@ pub use std::time::Duration;
 
 /// Host Metadata, which describes a host that runs a profiling agent. The current set of supported agent metadata is
 /// AWS-specific. If you are not running on AWS, you can use [AgentMetadata::NoMetadata].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum AgentMetadata {
     /// Metadata for an [EC2] instance running on AWS
@@ -41,6 +41,10 @@ pub enum AgentMetadata {
         ///
         /// See the ECS documentation for more details
         ecs_cluster_arn: String,
+        /// The task CPU allocation in vCPUs
+        task_cpu: f64,
+        /// The task memory allocation in MiB
+        task_memory: u64,
     },
     /// Metadata for a host that is neither an EC2 nor a Fargate
     #[deprecated = "Use AgentMetadata::NoMetadata"]
@@ -51,7 +55,7 @@ pub enum AgentMetadata {
 }
 
 /// Metadata associated with a specific individual profiling report
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ReportMetadata<'a> {
     /// The host running the agent
     pub instance: &'a AgentMetadata,

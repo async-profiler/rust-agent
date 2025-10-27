@@ -80,12 +80,22 @@ async fn read_ec2_metadata() -> Result<ImdsEc2InstanceMetadata, AwsProfilerMetad
     Ok(serde_json::from_str(imds_document.as_ref())?)
 }
 
-#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[derive(Deserialize, Debug, PartialEq)]
+struct FargateTaskLimits {
+    #[serde(rename = "CPU")]
+    cpu: f64,
+    #[serde(rename = "Memory")]
+    memory: u64,
+}
+
+#[derive(Deserialize, Debug, PartialEq)]
 struct FargateMetadata {
     #[serde(rename = "Cluster")]
     cluster: String,
     #[serde(rename = "TaskARN")]
     task_arn: String,
+    #[serde(rename = "Limits")]
+    limits: FargateTaskLimits,
 }
 
 async fn read_fargate_metadata(
@@ -144,6 +154,8 @@ impl super::AgentMetadata {
                 .to_string(),
             ecs_task_arn: fargate_metadata.task_arn,
             ecs_cluster_arn: fargate_metadata.cluster,
+            task_cpu: fargate_metadata.limits.cpu,
+            task_memory: fargate_metadata.limits.memory,
         })
     }
 }
@@ -327,6 +339,10 @@ mod tests {
                 cluster: "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster"
                     .to_owned(),
                 task_arn: "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f".to_owned(),
+                limits: FargateTaskLimits {
+                    cpu: 0.25,
+                    memory: 2048,
+                },
             }
         );
 
@@ -339,6 +355,8 @@ mod tests {
                 aws_region_id: "us-east-1".to_owned(),
                 ecs_task_arn: "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f".to_owned(),
                 ecs_cluster_arn: "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster".to_owned(),
+                task_cpu: 0.25,
+                task_memory: 2048,
             }
         )
     }
