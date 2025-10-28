@@ -50,6 +50,59 @@ pub enum AgentMetadata {
     NoMetadata,
 }
 
+impl AgentMetadata {
+    /// Create metadata corresponding to an EC2 instance running on AWS.
+    ///
+    /// This function is versioned to allow for extensibility.
+    ///
+    /// ```rust
+    /// # use async_profiler_agent::metadata::AgentMetadata;
+    /// let _metadata = AgentMetadata::ec2_agent_metadata_v1(
+    ///     "123456789012".to_string(),
+    ///     "us-east-1".to_string(),
+    ///     "i-1234567890abcdef0".to_string(),
+    /// );
+    /// ```
+    pub fn ec2_agent_metadata_v1(
+        aws_account_id: String,
+        aws_region_id: String,
+        ec2_instance_id: String,
+    ) -> Self {
+        Self::Ec2AgentMetadata {
+            aws_account_id,
+            aws_region_id,
+            ec2_instance_id,
+        }
+    }
+
+    /// Create metadata corresponding to a Fargate task running on AWS.
+    ///
+    /// This function is versioned to allow for extensibility.
+    ///
+    /// ```rust
+    /// # use async_profiler_agent::metadata::AgentMetadata;
+    /// let _metadata = AgentMetadata::fargate_agent_metadata_v1(
+    ///     "123456789012".to_string(),
+    ///     "us-east-1".to_string(),
+    ///     "arn:aws:ecs:us-east-1:123456789012:task/cluster/5261e761e0e2a3d92da3f02c8e5bab1f".to_string(),
+    ///     "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster".to_string(),
+    /// );
+    /// ```
+    pub fn fargate_agent_metadata_v1(
+        aws_account_id: String,
+        aws_region_id: String,
+        ecs_task_arn: String,
+        ecs_cluster_arn: String,
+    ) -> Self {
+        Self::FargateAgentMetadata {
+            aws_account_id,
+            aws_region_id,
+            ecs_task_arn,
+            ecs_cluster_arn,
+        }
+    }
+}
+
 /// Metadata associated with a specific individual profiling report
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReportMetadata<'a> {
