@@ -19,6 +19,7 @@ chrono = "0.4"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 libloading = "0.9"
 reqwest = { version = "0.12", default-features = false, optional = true, features = ["charset", "http2"] }
+ordered-float = { version = "5", features=["serde"]}
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
@@ -49,6 +50,9 @@ s3-no-defaults = ["dep:aws-config", "dep:aws-sdk-s3"]
 aws-metadata = ["aws-metadata-no-defaults", "aws-config/default", "reqwest/rustls-tls"]
 # A version of the aws-metadata feature that does not enable AWS default features
 aws-metadata-no-defaults = ["dep:reqwest", "dep:aws-config", "dep:aws-arn"]
+# *Unstable* feature to allow Fargate CPU count. The feature will be stabilized
+# and removed soon.
+__unstable-fargate-cpu-count = []
 
 [package.metadata.docs.rs]
 all-features = true

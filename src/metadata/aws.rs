@@ -9,6 +9,8 @@ use reqwest::Method;
 use serde::Deserialize;
 use thiserror::Error;
 
+use crate::metadata::OrderedF64;
+
 use super::AgentMetadata;
 
 /// An error converting Fargate IMDS metadata to Agent metadata. This error
@@ -81,11 +83,24 @@ async fn read_ec2_metadata() -> Result<ImdsEc2InstanceMetadata, AwsProfilerMetad
 }
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
+struct FargateLimits {
+    #[serde(rename = "CPU")]
+    cpu: Option<OrderedF64>,
+    #[serde(rename = "Memory")]
+    memory: Option<u64>,
+}
+
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 struct FargateMetadata {
     #[serde(rename = "Cluster")]
     cluster: String,
     #[serde(rename = "TaskARN")]
     task_arn: String,
+    // According to <https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task-metadata-endpoint-v4-fargate-response.html>
+    // Limits: The resource limits specified at the task levels such as CPU (expressed in vCPUs) and memory.
+    // This parameter is omitted if no resource limits are defined.
+    #[serde(rename = "Limits")]
+    limits: Option<FargateLimits>,
 }
 
 async fn read_fargate_metadata(
@@ -144,6 +159,16 @@ impl super::AgentMetadata {
                 .to_string(),
             ecs_task_arn: fargate_metadata.task_arn,
             ecs_cluster_arn: fargate_metadata.cluster,
+            #[cfg(feature = "__unstable-fargate-cpu-count")]
+            cpu_limit: fargate_metadata
+                .limits
+                .as_ref()
+                .and_then(|limits| limits.cpu),
+            #[cfg(feature = "__unstable-fargate-cpu-count")]
+            memory_limit: fargate_metadata
+                .limits
+                .as_ref()
+                .and_then(|limits| limits.memory),
         })
     }
 }
@@ -173,6 +198,7 @@ pub async fn load_agent_metadata() -> Result<AgentMetadata, AwsProfilerMetadataE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_case::test_case;
 
     // these constants are "anonymized" (aka randomly generated in that format)
 
@@ -237,10 +263,29 @@ mod tests {
         )
     }
 
-    #[test]
-    fn test_fargate_metadata() {
-        let json_str = r#"
-{
+    #[test_case(
+        r#"{
+    "Cluster": "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster",
+    "TaskARN": "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f"
+}"#,
+        None,
+        None,
+        None
+        ; "no_limits"
+    )]
+    #[test_case(
+        r#"{
+    "Cluster": "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster",
+    "TaskARN": "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f",
+    "Limits": {}
+}"#,
+        Some(FargateLimits { cpu: None, memory: None }),
+        None,
+        None
+        ; "empty_limits"
+    )]
+    #[test_case(
+        r#"{
     "Cluster": "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster",
     "TaskARN": "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f",
     "Family": "profiler-metadata",
@@ -316,10 +361,19 @@ mod tests {
         "Utilized": 208,
         "Reserved": 20496
     }
-}
-"#;
-
-        let fargate_metadata: FargateMetadata = serde_json::from_str(&json_str).unwrap();
+}"#,
+        Some(FargateLimits { cpu: Some(0.25.into()), memory: Some(2048) }),
+        Some(0.25.into()),
+        Some(2048)
+        ; "with_limits"
+    )]
+    fn test_fargate_metadata(
+        json_str: &str,
+        expected_limits: Option<FargateLimits>,
+        _expected_cpu_limit: Option<OrderedF64>,
+        _expected_memory_limit: Option<u64>,
+    ) {
+        let fargate_metadata: FargateMetadata = serde_json::from_str(json_str).unwrap();
 
         assert_eq!(
             fargate_metadata,
@@ -327,6 +381,7 @@ mod tests {
                 cluster: "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster"
                     .to_owned(),
                 task_arn: "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f".to_owned(),
+                limits: expected_limits,
             }
         );
 
@@ -339,6 +394,10 @@ mod tests {
                 aws_region_id: "us-east-1".to_owned(),
                 ecs_task_arn: "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f".to_owned(),
                 ecs_cluster_arn: "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster".to_owned(),
+                #[cfg(feature = "__unstable-fargate-cpu-count")]
+                cpu_limit: _expected_cpu_limit,
+                #[cfg(feature = "__unstable-fargate-cpu-count")]
+                memory_limit: _expected_memory_limit,
             }
         )
     }
