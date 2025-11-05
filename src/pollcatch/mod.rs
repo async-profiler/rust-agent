@@ -28,8 +28,8 @@
 use std::{
     cell::Cell,
     sync::{
-        atomic::{self, AtomicBool},
         LazyLock,
+        atomic::{self, AtomicBool},
     },
 };
 
@@ -59,10 +59,10 @@ fn write_timestamp(before: u64) {
 
         buf[0..8].copy_from_slice(&before.to_le_bytes()[..]);
         buf[8..16].copy_from_slice(&end.to_le_bytes()[..]);
-        if let Err(e) = AsProf::emit_user_jfr(key, &buf) {
-            if !EMITTED_JFR_ERROR.swap(true, atomic::Ordering::Relaxed) {
-                tracing::warn!(message="error emitting jfr", error=?e);
-            }
+        if let Err(e) = AsProf::emit_user_jfr(key, &buf)
+            && !EMITTED_JFR_ERROR.swap(true, atomic::Ordering::Relaxed)
+        {
+            tracing::warn!(message="error emitting jfr", error=?e);
         }
     }
 }

@@ -115,8 +115,8 @@ impl Reporter for MultiReporter {
 mod test {
     use std::{
         sync::{
-            atomic::{self, AtomicBool},
             Arc,
+            atomic::{self, AtomicBool},
         },
         time::Duration,
     };
@@ -124,7 +124,7 @@ mod test {
     use async_trait::async_trait;
 
     use crate::{
-        metadata::{ReportMetadata, DUMMY_METADATA},
+        metadata::{DUMMY_METADATA, ReportMetadata},
         reporter::Reporter,
     };
 

@@ -6,7 +6,7 @@
 use crate::{
     asprof::{self, AsProfError},
     metadata::{AgentMetadata, ReportMetadata},
-    reporter::{local::LocalReporter, Reporter},
+    reporter::{Reporter, local::LocalReporter},
 };
 use std::{
     fs::File,
@@ -1140,8 +1140,8 @@ async fn profiler_tick<E: ProfilerEngine>(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{self, AtomicBool, AtomicU32};
     use std::sync::Arc;
+    use std::sync::atomic::{self, AtomicBool, AtomicU32};
 
     use test_case::test_case;
 
@@ -1456,7 +1456,10 @@ mod tests {
 
         let dummy_path = Path::new("/tmp/test.jfr");
         let args = opts.to_args_string(dummy_path);
-        assert_eq!(args, "start,event=cpu,interval=1000000000,wall=10000ms,jfr,cstack=dwarf,file=/tmp/test.jfr,nativemem=5000000");
+        assert_eq!(
+            args,
+            "start,event=cpu,interval=1000000000,wall=10000ms,jfr,cstack=dwarf,file=/tmp/test.jfr,nativemem=5000000"
+        );
     }
 
     #[test]

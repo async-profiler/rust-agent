@@ -95,7 +95,7 @@ mod test {
 
     use crate::{
         metadata::DUMMY_METADATA,
-        reporter::{local::LocalReporter, Reporter},
+        reporter::{Reporter, local::LocalReporter},
     };
 
     #[tokio::test]

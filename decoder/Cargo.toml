@@ -1,13 +1,15 @@
 [package]
 name = "pollcatch-decoder"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 description = "finds long Tokio polls, CLI"
 homepage = "https://github.com/async-profiler/rust-agent"
 documentation = "https://docs.rs/async-profiler-agent"
 readme = "README.md"
 keywords = ["timing"]
+rust-version = "1.88"
+resolver = "3" # MSRV-aware resolver
 
 [dependencies]
 jfrs = "0.2"

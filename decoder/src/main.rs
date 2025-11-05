@@ -6,10 +6,10 @@ use std::{
 
 use clap::{Parser, Subcommand};
 use jfrs::reader::{
+    Chunk, JfrReader,
     event::Accessor,
     type_descriptor::TypeDescriptor,
     value_descriptor::{Primitive, ValueDescriptor},
-    Chunk, JfrReader,
 };
 use std::io::{Read, Seek};
 use std::time::Duration;
@@ -142,10 +142,10 @@ fn main() -> anyhow::Result<()> {
 }
 
 fn symbol_to_string(s: Accessor<'_>) -> Option<&str> {
-    if let Some(sym) = s.get_field("string") {
-        if let Ok(val) = sym.value.try_into() {
-            return Some(val);
-        }
+    if let Some(sym) = s.get_field("string")
+        && let Ok(val) = sym.value.try_into()
+    {
+        return Some(val);
     }
 
     None
@@ -212,26 +212,26 @@ struct StackFrame {
 
 fn resolve_stack_trace(trace: Accessor<'_>) -> Vec<StackFrame> {
     let mut res = vec![];
-    if let Some(frames) = trace.get_field("frames") {
-        if let Some(frames) = frames.as_iter() {
-            for frame in frames {
-                let mut class_name_s = None;
-                let mut name_s = None;
-                if let Some(method) = frame.get_field("method") {
-                    if let Some(class) = method.get_field("type") {
-                        if let Some(class_name) = class.get_field("name") {
-                            class_name_s = symbol_to_string(class_name).map(|x| x.to_owned());
-                        }
-                    }
-                    if let Some(name) = method.get_field("name") {
-                        name_s = symbol_to_string(name).map(|x| x.to_owned());
-                    }
+    if let Some(frames) = trace.get_field("frames")
+        && let Some(frames) = frames.as_iter()
+    {
+        for frame in frames {
+            let mut class_name_s = None;
+            let mut name_s = None;
+            if let Some(method) = frame.get_field("method") {
+                if let Some(class) = method.get_field("type")
+                    && let Some(class_name) = class.get_field("name")
+                {
+                    class_name_s = symbol_to_string(class_name).map(|x| x.to_owned());
                 }
-                res.push(StackFrame {
-                    class_name: class_name_s,
-                    name: name_s,
-                });
+                if let Some(name) = method.get_field("name") {
+                    name_s = symbol_to_string(name).map(|x| x.to_owned());
+                }
             }
+            res.push(StackFrame {
+                class_name: class_name_s,
+                name: name_s,
+            });
         }
     }
     res
@@ -278,10 +278,10 @@ fn process_sample(
 ) -> Option<Sample> {
     let mut delta_t = None;
     let mut thread_id = !0;
-    if let Some(ValueDescriptor::Object(st)) = sampled_thread {
-        if let Some(tid) = st.fields.get(tys.os_thread_index).and_then(as_long) {
-            thread_id = tid;
-        }
+    if let Some(ValueDescriptor::Object(st)) = sampled_thread
+        && let Some(tid) = st.fields.get(tys.os_thread_index).and_then(as_long)
+    {
+        thread_id = tid;
     }
     if delta_t.is_none() {
         delta_t = find_delta_t_from_clock(pr_map, thread_id, start_time_ticks);
@@ -535,10 +535,10 @@ fn poll_event_from_user_event(
         let mut thread_id = 0;
         let event_thread =
             resolve_field(chunk, event, tys.user_event_event_thread_index).and_then(as_object);
-        if let Some(et) = event_thread {
-            if let Some(tid) = et.fields.get(tys.os_thread_index).and_then(as_long) {
-                thread_id = tid;
-            }
+        if let Some(et) = event_thread
+            && let Some(tid) = et.fields.get(tys.os_thread_index).and_then(as_long)
+        {
+            thread_id = tid;
         }
         let data = if let Some(s) = event
             .fields
@@ -589,80 +589,79 @@ where
         let mut jfr_pr_map = vec![];
         for event in c_rdr.events_from_offset(&c, 0) {
             let event: jfrs::reader::event::Event<'_> = event?;
-            if Some(event.class.class_id) == tys.user_event {
-                if let Some(event) = poll_event_from_user_event(&c, &tys, event) {
-                    jfr_pr_map.push(event);
-                }
+            if Some(event.class.class_id) == tys.user_event
+                && let Some(event) = poll_event_from_user_event(&c, &tys, event)
+            {
+                jfr_pr_map.push(event);
             }
         }
         jfr_pr_map.sort();
         for event in c_rdr.events_from_offset(&c, 0) {
             let event: jfrs::reader::event::Event<'_> = event?;
-            if Some(event.class.class_id) == tys.active_setting {
-                if let ValueDescriptor::Object(o) = event.value().value {
-                    let name =
-                        resolve_field(&c, o, tys.active_setting_name_index).and_then(as_string);
-                    let value =
-                        resolve_field(&c, o, tys.active_setting_value_index).and_then(as_string);
-                    if let (Some("clock"), Some(value)) = (name, value) {
-                        if value == "tsc" {
-                            pr_map = &jfr_pr_map;
-                        } else {
-                            anyhow::bail!("decoder only supports tsc profiles, not {value:?}");
-                        }
+            if Some(event.class.class_id) == tys.active_setting
+                && let ValueDescriptor::Object(o) = event.value().value
+            {
+                let name = resolve_field(&c, o, tys.active_setting_name_index).and_then(as_string);
+                let value =
+                    resolve_field(&c, o, tys.active_setting_value_index).and_then(as_string);
+                if let (Some("clock"), Some(value)) = (name, value) {
+                    if value == "tsc" {
+                        pr_map = &jfr_pr_map;
+                    } else {
+                        anyhow::bail!("decoder only supports tsc profiles, not {value:?}");
                     }
                 }
             }
-            if Some(event.class.class_id) == tys.wall_clock_sample {
-                if let Some(o) = as_object(event.value().value) {
-                    let start_time_ticks = o
-                        .fields
-                        .get(tys.wcs_start_time_index)
-                        .and_then(as_long)
-                        .unwrap_or(0);
-                    let sampled_thread = o
-                        .fields
-                        .get(tys.wcs_sampled_thread_index)
-                        .and_then(|st| Accessor::new(&c, st).resolve())
-                        .map(|a| a.value);
-                    let stacktrace = o.fields.get(tys.wcs_stacktrace_index);
-                    if let Some(sample) = process_sample(
-                        &c,
-                        &tys,
-                        pr_map,
-                        sampled_thread,
-                        stacktrace,
-                        start_time_ticks,
-                        config,
-                    ) {
-                        samples.push(sample);
-                    }
+            if Some(event.class.class_id) == tys.wall_clock_sample
+                && let Some(o) = as_object(event.value().value)
+            {
+                let start_time_ticks = o
+                    .fields
+                    .get(tys.wcs_start_time_index)
+                    .and_then(as_long)
+                    .unwrap_or(0);
+                let sampled_thread = o
+                    .fields
+                    .get(tys.wcs_sampled_thread_index)
+                    .and_then(|st| Accessor::new(&c, st).resolve())
+                    .map(|a| a.value);
+                let stacktrace = o.fields.get(tys.wcs_stacktrace_index);
+                if let Some(sample) = process_sample(
+                    &c,
+                    &tys,
+                    pr_map,
+                    sampled_thread,
+                    stacktrace,
+                    start_time_ticks,
+                    config,
+                ) {
+                    samples.push(sample);
                 }
             }
-            if Some(event.class.class_id) == tys.execution_sample {
-                if let Some(o) = as_object(event.value().value) {
-                    let start_time_ticks = o
-                        .fields
-                        .get(tys.exs_start_time_index)
-                        .and_then(as_long)
-                        .unwrap_or(0);
-                    let sampled_thread = o
-                        .fields
-                        .get(tys.exs_sampled_thread_index)
-                        .and_then(|st| Accessor::new(&c, st).resolve())
-                        .map(|a| a.value);
-                    let stacktrace = o.fields.get(tys.exs_stacktrace_index);
-                    if let Some(sample) = process_sample(
-                        &c,
-                        &tys,
-                        pr_map,
-                        sampled_thread,
-                        stacktrace,
-                        start_time_ticks,
-                        config,
-                    ) {
-                        samples.push(sample);
-                    }
+            if Some(event.class.class_id) == tys.execution_sample
+                && let Some(o) = as_object(event.value().value)
+            {
+                let start_time_ticks = o
+                    .fields
+                    .get(tys.exs_start_time_index)
+                    .and_then(as_long)
+                    .unwrap_or(0);
+                let sampled_thread = o
+                    .fields
+                    .get(tys.exs_sampled_thread_index)
+                    .and_then(|st| Accessor::new(&c, st).resolve())
+                    .map(|a| a.value);
+                let stacktrace = o.fields.get(tys.exs_stacktrace_index);
+                if let Some(sample) = process_sample(
+                    &c,
+                    &tys,
+                    pr_map,
+                    sampled_thread,
+                    stacktrace,
+                    start_time_ticks,
+                    config,
+                ) {
+                    samples.push(sample);
                 }
             }
         }
@@ -814,8 +813,8 @@ fn print_native_mem_events<F: Write>(
 #[cfg(test)]
 mod test {
     use super::{
-        jfr_native_mem_events, jfr_samples, print_native_mem_events, print_samples, NativeMemEvent,
-        Sample, StackFrame,
+        NativeMemEvent, Sample, StackFrame, jfr_native_mem_events, jfr_samples,
+        print_native_mem_events, print_samples,
     };
     use std::io;
     use std::time::Duration;

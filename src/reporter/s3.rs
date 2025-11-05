@@ -12,7 +12,7 @@ use std::time::SystemTime;
 use std::{fmt, io::Cursor};
 use thiserror::Error;
 use zip::result::ZipError;
-use zip::{write::SimpleFileOptions, ZipWriter};
+use zip::{ZipWriter, write::SimpleFileOptions};
 
 use crate::metadata::{AgentMetadata, ReportMetadata};
 
