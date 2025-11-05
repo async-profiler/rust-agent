@@ -3,7 +3,7 @@
 
 use crate::profiler::ProfilerOptions;
 use std::{
-    ffi::{c_char, CStr, CString},
+    ffi::{CStr, CString, c_char},
     path::Path,
     ptr::{self, addr_of},
     sync::Arc,
@@ -130,12 +130,16 @@ impl AsProf {
     /// SAFETY: response must be a valid asprof_error_t
     unsafe fn asprof_error(response: raw::asprof_error_t) -> Result<(), AsProfError> {
         if !response.is_null() {
-            let response = (raw::async_profiler()?.asprof_error_str)(response);
-            if response.is_null() {
-                return Ok(());
-            }
-            let response = unsafe { CStr::from_ptr(response) };
-            let response_str = response.to_string_lossy();
+            let response_str = unsafe {
+                // safety: asprof_error_str returns a valid CStr pointer
+                // given an asprof_error_t
+                let response = (raw::async_profiler()?.asprof_error_str)(response);
+                if response.is_null() {
+                    return Ok(());
+                }
+                let response = CStr::from_ptr(response);
+                response.to_string_lossy()
+            };
             tracing::error!("received error from async-profiler: {}", response_str);
             Err(AsProfError::AsyncProfilerError(response_str.to_string()))
             // TODO: stop the background thread in case there is an error

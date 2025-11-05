@@ -17,7 +17,7 @@ use clap::{ArgGroup, Parser};
 mod slow;
 
 pub fn set_up_tracing() {
-    use tracing_subscriber::{prelude::*, EnvFilter};
+    use tracing_subscriber::{EnvFilter, prelude::*};
 
     let format = tracing_subscriber::fmt::layer().pretty();
     let filter = EnvFilter::try_from_default_env()
