@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.10](https://github.com/async-profiler/rust-agent/compare/v0.1.9...v0.1.10) - 2025-11-13
+
+### Added
+
+- add parsing of CPU and Memory fields behind unstable feature flag, will be stable in the next release ([#106](https://github.com/async-profiler/rust-agent/pull/106))
+- add constructors for agent metadata types ([#106](https://github.com/async-profiler/rust-agent/pull/106))
+
+### Fixed
+
+- Fix compilation on macOS ([#105](https://github.com/async-profiler/rust-agent/pull/105))
+
 ## [0.1.9](https://github.com/async-profiler/rust-agent/compare/v0.1.8...v0.1.9) - 2025-10-16
 
 ### Added
