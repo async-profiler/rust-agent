@@ -132,6 +132,7 @@ fn make_s3_file_name(
             aws_account_id: _,
             aws_region_id: _,
             ec2_instance_id,
+            ..
         } => {
             let ec2_instance_id = ec2_instance_id.replace("/", "-").replace("_", "-");
             format!("ec2_{ec2_instance_id}_")
@@ -141,6 +142,7 @@ fn make_s3_file_name(
             aws_region_id: _,
             ecs_task_arn,
             ecs_cluster_arn: _,
+            ..
         } => {
             let task_arn = ecs_task_arn.replace("/", "-").replace("_", "-");
             format!("ecs_{task_arn}_")
@@ -256,17 +258,17 @@ mod test {
 
     #[test_case(#[allow(deprecated)] { AgentMetadata::Other }, "profile_pg_onprem___<pid>_<time>.zip"; "other")]
     #[test_case(AgentMetadata::NoMetadata, "profile_pg_unknown___<pid>_<time>.zip"; "no-metadata")]
-    #[test_case(AgentMetadata::Ec2AgentMetadata {
-        aws_account_id: "1".into(),
-        aws_region_id: "us-east-1".into(),
-        ec2_instance_id: "i-0".into()
-    }, "profile_pg_ec2_i-0__<pid>_<time>.zip"; "ec2")]
-    #[test_case(AgentMetadata::FargateAgentMetadata {
-        aws_account_id: "1".into(),
-        aws_region_id: "us-east-1".into(),
-        ecs_task_arn: "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f".into(),
-        ecs_cluster_arn: "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster".into()
-    }, "profile_pg_ecs_arn:aws:ecs:us-east-1:123456789012:task-profiler-metadata-cluster-5261e761e0e2a3d92da3f02c8e5bab1f__<pid>_<time>.zip"; "ecs")]
+    #[test_case(AgentMetadata::ec2_agent_metadata(
+        "1".into(),
+        "us-east-1".into(),
+        "i-0".into()
+    ).build(), "profile_pg_ec2_i-0__<pid>_<time>.zip"; "ec2")]
+    #[test_case(AgentMetadata::fargate_agent_metadata(
+        "1".into(),
+        "us-east-1".into(),
+        "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f".into(),
+        "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster".into(),
+    ).build(), "profile_pg_ecs_arn:aws:ecs:us-east-1:123456789012:task-profiler-metadata-cluster-5261e761e0e2a3d92da3f02c8e5bab1f__<pid>_<time>.zip"; "ecs")]
     fn test_make_s3_file_name(metadata: AgentMetadata, expected: &str) {
         let file_name = super::make_s3_file_name(&metadata, "pg", SystemTime::UNIX_EPOCH);
         assert_eq!(
