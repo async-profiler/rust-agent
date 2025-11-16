@@ -51,6 +51,9 @@ pub enum AgentMetadata {
         aws_region_id: String,
         /// The EC2 instance id
         ec2_instance_id: String,
+        #[cfg(feature = "__unstable-fargate-cpu-count")]
+        /// The EC2 instance type
+        ec2_instance_type: String,
     },
     /// Metadata for a [Fargate] task running on AWS.
     ///
@@ -130,6 +133,7 @@ impl AgentMetadata {
             aws_account_id,
             aws_region_id,
             ec2_instance_id,
+            ec2_instance_type: None,
         }
     }
 
@@ -184,15 +188,24 @@ pub struct Ec2AgentMetadataBuilder {
     aws_account_id: String,
     aws_region_id: String,
     ec2_instance_id: String,
+    ec2_instance_type: Option<String>,
 }
 
 impl Ec2AgentMetadataBuilder {
+    /// Set the EC2 instance type
+    pub fn with_ec2_instance_type(mut self, ec2_instance_type: String) -> Self {
+        self.ec2_instance_type = Some(ec2_instance_type);
+        self
+    }
+
     /// Build the AgentMetadata
     pub fn build(self) -> AgentMetadata {
         AgentMetadata::Ec2AgentMetadata {
             aws_account_id: self.aws_account_id,
             aws_region_id: self.aws_region_id,
             ec2_instance_id: self.ec2_instance_id,
+            #[cfg(feature = "__unstable-fargate-cpu-count")]
+            ec2_instance_type: self.ec2_instance_type.unwrap_or_default(),
         }
     }
 }

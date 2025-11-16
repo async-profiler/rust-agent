@@ -1217,6 +1217,8 @@ mod tests {
                 aws_account_id: "0".into(),
                 aws_region_id: "us-east-1".into(),
                 ec2_instance_id: "i-fake".into(),
+                #[cfg(feature = "__unstable-fargate-cpu-count")]
+                ec2_instance_type: "t3.micro".into(),
             })
             .build();
         (agent, rx)
@@ -1228,6 +1230,8 @@ mod tests {
             aws_account_id: "0".into(),
             aws_region_id: "us-east-1".into(),
             ec2_instance_id: "i-fake".into(),
+            #[cfg(feature = "__unstable-fargate-cpu-count")]
+            ec2_instance_type: "t3.micro".into(),
         };
         let (agent, mut rx) = make_mock_profiler();
         agent
@@ -1251,6 +1255,8 @@ mod tests {
             aws_account_id: "0".into(),
             aws_region_id: "us-east-1".into(),
             ec2_instance_id: "i-fake".into(),
+            #[cfg(feature = "__unstable-fargate-cpu-count")]
+            ec2_instance_type: "t3.micro".into(),
         };
         let (agent, mut rx) = make_mock_profiler();
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -1317,6 +1323,8 @@ mod tests {
             aws_account_id: "0".into(),
             aws_region_id: "us-east-1".into(),
             ec2_instance_id: "i-fake".into(),
+            #[cfg(feature = "__unstable-fargate-cpu-count")]
+            ec2_instance_type: "t3.micro".into(),
         };
         let (agent, mut rx) = make_mock_profiler();
         let profiler_ref = agent
