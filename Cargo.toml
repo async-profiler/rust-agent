@@ -1,6 +1,6 @@
 [package]
 name = "async-profiler-agent"
-version = "0.1.10"
+version = "0.1.11"
 description = "Rust agent for async-profiler"
 license = "Apache-2.0"
 repository = "https://github.com/async-profiler/rust-agent"
