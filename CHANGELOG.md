@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.11](https://github.com/async-profiler/rust-agent/compare/v0.1.10...v0.1.11) - 2025-11-16
+
+### Added
+
+- pass ec2 instance type from imds in EC2 instance metadata
+
 ## [0.1.10](https://github.com/async-profiler/rust-agent/compare/v0.1.9...v0.1.10) - 2025-11-13
 
 ### Added
