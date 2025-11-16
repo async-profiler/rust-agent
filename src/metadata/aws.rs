@@ -140,6 +140,8 @@ impl super::AgentMetadata {
             aws_account_id: imds_ec2_instance_metadata.account_id,
             aws_region_id: imds_ec2_instance_metadata.region,
             ec2_instance_id: imds_ec2_instance_metadata.instance_id,
+            #[cfg(feature = "__unstable-fargate-cpu-count")]
+            ec2_instance_type: imds_ec2_instance_metadata.instance_type,
         }
     }
 
@@ -253,14 +255,15 @@ mod tests {
         let agent_metadata =
             AgentMetadata::from_imds_ec2_instance_metadata(imds_ec2_instance_metadata);
 
-        assert_eq!(
-            agent_metadata,
-            AgentMetadata::Ec2AgentMetadata {
-                aws_account_id: "123456789012".to_owned(),
-                aws_region_id: "eu-west-1".to_owned(),
-                ec2_instance_id: "i-092eba08c089f6325".to_owned(),
-            }
+        let expected = AgentMetadata::ec2_agent_metadata(
+            "123456789012".to_owned(),
+            "eu-west-1".to_owned(),
+            "i-092eba08c089f6325".to_owned(),
         )
+        .with_ec2_instance_type("c5.4xlarge".to_owned())
+        .build();
+
+        assert_eq!(agent_metadata, expected);
     }
 
     #[test_case(
