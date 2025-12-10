@@ -10,7 +10,7 @@ use crate::{
 };
 use std::{
     fs::File,
-    io,
+    io, mem,
     path::{Path, PathBuf},
     time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH},
 };
@@ -1068,6 +1068,18 @@ impl Profiler {
     }
 
     fn spawn_inner<E: ProfilerEngine>(self, asprof: E) -> Result<RunningProfiler, SpawnError> {
+        struct LogOnDrop;
+        impl Drop for LogOnDrop {
+            fn drop(&mut self) {
+                // Tokio will call destructors during runtime shutdown. Have something that will
+                // emit a log in that case
+                tracing::info!(
+                    "unable to upload the last jfr due to Tokio runtime shutdown. \
+                Add a call to `RunningProfiler::stop` to wait for jfr upload to finish."
+                );
+            }
+        }
+
         // Initialize async profiler - needs to be done once.
         E::init_async_profiler()?;
         tracing::info!("successfully initialized async profiler.");
@@ -1089,6 +1101,7 @@ impl Profiler {
             let mut agent_metadata = self.agent_metadata;
             let mut done = false;
 
+            let guard = LogOnDrop;
             while !done {
                 // Wait until a timer or exit event
                 tokio::select! {
@@ -1128,6 +1141,7 @@ impl Profiler {
                 }
             }
 
+            mem::forget(guard);
             tracing::info!("profiling task finished");
         });
 
