@@ -764,6 +764,18 @@ impl Profiler {
     ///
     /// [JoinHandle]: tokio::task::JoinHandle
     ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from the Tokio `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [Profiler::spawn_controllable] and
+    /// [RunningProfiler::stop] , which allows waiting for the upload
+    /// to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
+    ///
     /// ### Tokio Runtime
     ///
     /// This function must be run within a Tokio runtime, otherwise it will panic. If
@@ -805,6 +817,18 @@ impl Profiler {
     /// allow for configuring thread properties, for example thread names).
     ///
     /// This is to be used when your program does not have a "main" Tokio runtime already set up.
+    ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [Profiler::spawn_controllable_thread_to_runtime]
+    /// and [RunningProfilerThread::stop], which allows waiting for the upload
+    /// to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
     ///
     /// ### Example
     ///
@@ -855,6 +879,18 @@ impl Profiler {
     /// [Profiler::spawn_controllable_thread_to_runtime].
     ///
     /// This is to be used when your program does not have a "main" Tokio runtime already set up.
+    ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [Profiler::spawn_controllable_thread_to_runtime]
+    /// and [RunningProfilerThread::stop], which allows waiting for the upload
+    /// to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
     ///
     /// ### Example
     ///
@@ -909,6 +945,17 @@ impl Profiler {
     /// This function will fail if it is unable to start async-profiler, for example
     /// if it can't find or load `libasyncProfiler.so`.
     ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from the Tokio `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [RunningProfiler::stop], which allows waiting for
+    /// the upload to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
+    ///
     /// ### Tokio Runtime
     ///
     /// This function must be run within a Tokio runtime, otherwise it will panic. If
@@ -957,6 +1004,17 @@ impl Profiler {
     /// allow for configuring thread properties, for example thread names).
     ///
     /// This is to be used when your program does not have a "main" Tokio runtime already set up.
+    ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [RunningProfilerThread::stop], which allows waiting
+    /// for the upload to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
     ///
     /// ### Example
     ///
