@@ -138,14 +138,17 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem("10m".into()).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -172,14 +175,17 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem_bytes(10_000_000).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -189,14 +195,17 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem_bytes(0).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -234,7 +243,8 @@ impl ProfilerOptionsBuilder {
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
     /// # use std::time::Duration;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default()
     ///     .with_cpu_interval(Duration::from_millis(10))
     ///     .with_wall_clock_interval(Duration::from_millis(100))
@@ -244,7 +254,9 @@ impl ProfilerOptionsBuilder {
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -285,7 +297,8 @@ impl ProfilerOptionsBuilder {
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
     /// # use std::time::Duration;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default()
     ///     .with_cpu_interval(Duration::from_millis(10))
     ///     .with_wall_clock_interval(Duration::from_millis(10))
@@ -295,7 +308,9 @@ impl ProfilerOptionsBuilder {
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -339,6 +354,9 @@ impl ProfilerBuilder {
     /// ## Example
     ///
     /// ```no_run
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// # use std::path::PathBuf;
     /// # use std::time::Duration;
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
@@ -347,8 +365,11 @@ impl ProfilerBuilder {
     ///     .with_local_reporter(path)
     ///     .with_reporting_interval(Duration::from_secs(15))
     ///     .build()
-    ///     .spawn()?;
+    ///     .spawn_controllable()?;
+    /// // .. your program goes here
+    /// agent.stop().await; // make sure the last profile is flushed
     /// # Ok::<_, SpawnError>(())
+    /// # }
     /// ```
     pub fn with_reporting_interval(mut self, i: Duration) -> ProfilerBuilder {
         self.reporting_interval = Some(i);
@@ -452,14 +473,17 @@ impl ProfilerBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem("10m".into()).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
