@@ -67,6 +67,9 @@ struct Args {
     /// Use the spawn_thread API instead of the Tokio API (does not demonstrate stopping)
     #[arg(long)]
     spawn_into_thread: bool,
+    /// Whether to not do a clean stop. Used to test unclean stops.
+    #[arg(long)]
+    no_clean_stop: bool,
 }
 
 impl Args {
@@ -155,13 +158,21 @@ async fn main_internal(args: Args) -> Result<(), anyhow::Error> {
         });
         run_slow(&args).await;
     } else {
-        tracing::info!("starting profiler");
-        let handle = profiler.spawn_controllable()?;
-        tracing::info!("profiler started");
+        if args.no_clean_stop {
+            tracing::info!("starting profiler");
+            profiler.spawn()?;
+            tracing::info!("profiler started");
 
-        run_slow(&args).await;
+            run_slow(&args).await;
+        } else {
+            tracing::info!("starting profiler");
+            let handle = profiler.spawn_controllable()?;
+            tracing::info!("profiler started");
 
-        handle.stop().await;
+            run_slow(&args).await;
+
+            handle.stop().await;
+        }
     }
 
     Ok(())

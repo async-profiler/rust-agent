@@ -10,7 +10,7 @@ use crate::{
 };
 use std::{
     fs::File,
-    io,
+    io, mem,
     path::{Path, PathBuf},
     time::{Duration, SystemTime, SystemTimeError, UNIX_EPOCH},
 };
@@ -138,14 +138,17 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem("10m".into()).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -172,14 +175,17 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem_bytes(10_000_000).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -189,14 +195,17 @@ impl ProfilerOptionsBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem_bytes(0).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -234,7 +243,8 @@ impl ProfilerOptionsBuilder {
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
     /// # use std::time::Duration;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default()
     ///     .with_cpu_interval(Duration::from_millis(10))
     ///     .with_wall_clock_interval(Duration::from_millis(100))
@@ -244,7 +254,9 @@ impl ProfilerOptionsBuilder {
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -285,7 +297,8 @@ impl ProfilerOptionsBuilder {
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
     /// # use std::time::Duration;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default()
     ///     .with_cpu_interval(Duration::from_millis(10))
     ///     .with_wall_clock_interval(Duration::from_millis(10))
@@ -295,7 +308,9 @@ impl ProfilerOptionsBuilder {
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -339,6 +354,9 @@ impl ProfilerBuilder {
     /// ## Example
     ///
     /// ```no_run
+    /// # use async_profiler_agent::profiler::SpawnError;
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// # use std::path::PathBuf;
     /// # use std::time::Duration;
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, SpawnError};
@@ -347,8 +365,11 @@ impl ProfilerBuilder {
     ///     .with_local_reporter(path)
     ///     .with_reporting_interval(Duration::from_secs(15))
     ///     .build()
-    ///     .spawn()?;
+    ///     .spawn_controllable()?;
+    /// // .. your program goes here
+    /// agent.stop().await; // make sure the last profile is flushed
     /// # Ok::<_, SpawnError>(())
+    /// # }
     /// ```
     pub fn with_reporting_interval(mut self, i: Duration) -> ProfilerBuilder {
         self.reporting_interval = Some(i);
@@ -452,14 +473,17 @@ impl ProfilerBuilder {
     /// ```
     /// # use async_profiler_agent::profiler::{ProfilerBuilder, ProfilerOptionsBuilder};
     /// # use async_profiler_agent::profiler::SpawnError;
-    /// # fn main() -> Result<(), SpawnError> {
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), SpawnError> {
     /// let opts = ProfilerOptionsBuilder::default().with_native_mem("10m".into()).build();
     /// let profiler = ProfilerBuilder::default()
     ///     .with_profiler_options(opts)
     ///     .with_local_reporter("/tmp/profiles")
     ///     .build();
     /// # if false { // don't spawn the profiler in doctests
-    /// profiler.spawn()?;
+    /// let profiler = profiler.spawn_controllable()?;
+    /// // ... your program goes here
+    /// profiler.stop().await; // make sure the last profile is flushed
     /// # }
     /// # Ok(())
     /// # }
@@ -764,6 +788,18 @@ impl Profiler {
     ///
     /// [JoinHandle]: tokio::task::JoinHandle
     ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from the Tokio `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [Profiler::spawn_controllable] and
+    /// [RunningProfiler::stop] , which allows waiting for the upload
+    /// to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
+    ///
     /// ### Tokio Runtime
     ///
     /// This function must be run within a Tokio runtime, otherwise it will panic. If
@@ -805,6 +841,18 @@ impl Profiler {
     /// allow for configuring thread properties, for example thread names).
     ///
     /// This is to be used when your program does not have a "main" Tokio runtime already set up.
+    ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [Profiler::spawn_controllable_thread_to_runtime]
+    /// and [RunningProfilerThread::stop], which allows waiting for the upload
+    /// to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
     ///
     /// ### Example
     ///
@@ -855,6 +903,18 @@ impl Profiler {
     /// [Profiler::spawn_controllable_thread_to_runtime].
     ///
     /// This is to be used when your program does not have a "main" Tokio runtime already set up.
+    ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [Profiler::spawn_controllable_thread_to_runtime]
+    /// and [RunningProfilerThread::stop], which allows waiting for the upload
+    /// to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
     ///
     /// ### Example
     ///
@@ -909,6 +969,17 @@ impl Profiler {
     /// This function will fail if it is unable to start async-profiler, for example
     /// if it can't find or load `libasyncProfiler.so`.
     ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from the Tokio `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [RunningProfiler::stop], which allows waiting for
+    /// the upload to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
+    ///
     /// ### Tokio Runtime
     ///
     /// This function must be run within a Tokio runtime, otherwise it will panic. If
@@ -957,6 +1028,17 @@ impl Profiler {
     /// allow for configuring thread properties, for example thread names).
     ///
     /// This is to be used when your program does not have a "main" Tokio runtime already set up.
+    ///
+    /// ### Uploading the last sample
+    ///
+    /// When you return from `main`, the agent will terminate without waiting
+    /// for the last profiling JFR to be uploaded. Especially if you have a
+    /// short-running program, if you want to ensure the last profiling JFR
+    /// is uploaded, you should use [RunningProfilerThread::stop], which allows waiting
+    /// for the upload to finish.
+    ///
+    /// If you do not care about losing the last sample, it is fine to directly
+    /// return from the Tokio `main` without stopping the profiler.
     ///
     /// ### Example
     ///
@@ -1010,6 +1092,18 @@ impl Profiler {
     }
 
     fn spawn_inner<E: ProfilerEngine>(self, asprof: E) -> Result<RunningProfiler, SpawnError> {
+        struct LogOnDrop;
+        impl Drop for LogOnDrop {
+            fn drop(&mut self) {
+                // Tokio will call destructors during runtime shutdown. Have something that will
+                // emit a log in that case
+                tracing::info!(
+                    "unable to upload the last jfr due to Tokio runtime shutdown. \
+                Add a call to `RunningProfiler::stop` to wait for jfr upload to finish."
+                );
+            }
+        }
+
         // Initialize async profiler - needs to be done once.
         E::init_async_profiler()?;
         tracing::info!("successfully initialized async profiler.");
@@ -1031,6 +1125,7 @@ impl Profiler {
             let mut agent_metadata = self.agent_metadata;
             let mut done = false;
 
+            let guard = LogOnDrop;
             while !done {
                 // Wait until a timer or exit event
                 tokio::select! {
@@ -1070,6 +1165,7 @@ impl Profiler {
                 }
             }
 
+            mem::forget(guard);
             tracing::info!("profiling task finished");
         });
 

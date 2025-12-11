@@ -12,6 +12,14 @@ dir="profiles"
 mkdir -p $dir
 rm -f $dir/*.jfr
 
+# test the "unable to uploqad the last jfr" logic
+rm -rf $dir/short
+mkdir $dir/short
+./simple --local $dir/short --duration 1s --reporting-interval 10s --no-clean-stop >$dir/short/log
+cat $dir/short/log
+grep "unable to upload the last jfr" $dir/short/log
+rm -rf $dir/short
+
 # Pass --worker-threads 16 to make the test much less flaky since there is always some worker thread running
 ./simple --local $dir --duration 30s --reporting-interval 10s --worker-threads 16 --native-mem 4096
 

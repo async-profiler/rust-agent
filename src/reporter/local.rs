@@ -41,7 +41,9 @@ enum LocalReporterError {
 ///    .with_local_reporter("/tmp/profiles")
 ///    .build();
 /// # if false { // don't spawn the profiler in doctests
-/// profiler.spawn()?;
+/// let profiler = profiler.spawn_controllable()?;
+/// // ... your program goes here
+/// profiler.stop().await; // make sure the last profile is flushed
 /// # }
 /// # Ok(())
 /// # }
