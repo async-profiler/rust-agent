@@ -59,7 +59,7 @@
 //! 2. metadata as `metadata.json`, in format [`reporter::s3::MetadataJson`].
 //!
 //! The `zip` file is uploaded to the bucket under the path `profile_{profiling_group_name}_{machine}_{pid}_{time}.zip`,
-//! where `{machine}` is either `ec2_{ec2_instance_id}_`, `ecs_{cluster_arn}_{task_arn}`, or `onprem__`.
+//! where `{machine}` is either `ec2_{ec2_instance_id}_`, `ecs_{cluster_arn}_{task_arn}`, or `unknown__`.
 //!
 //! In addition to the S3 reporter, this crate also includes [`LocalReporter`] that writes to a directory, and a `MultiReporter` that allows combining reporters. You can also write your own reporter (via the `Reporter` trait) to upload the profile results to your favorite profiler backend.
 //!

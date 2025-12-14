@@ -57,6 +57,17 @@ pub struct S3ReporterConfig<'a> {
 }
 
 /// A reporter that uploads reports to an S3 bucket
+///
+/// The [`S3Reporter`] uploads each report in a `zip` file, that currently contains 2 files:
+/// 1. a [JFR] as `async_profiler_dump_0.jfr`
+/// 2. metadata as `metadata.json`, in format [`MetadataJson`].
+///
+/// The `zip` file is uploaded to the specified bucket under the path
+/// `profile_{profiling_group_name}_{machine}_{pid}_{time}.zip`, where `{machine}` is either
+/// `ec2_{ec2_instance_id}_`, `ecs_{cluster_arn}_{task_arn}`, or `unknown__` (or,
+/// for the deprecated [AgentMetadata::Other], `onprem__`).
+///
+/// [JFR]: https://docs.oracle.com/javacomponents/jmc-5-4/jfr-runtime-guide/about.htm
 pub struct S3Reporter {
     s3_client: aws_sdk_s3::Client,
     bucket_owner: String,

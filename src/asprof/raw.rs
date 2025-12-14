@@ -5,7 +5,7 @@ use std::sync::{Arc, LazyLock};
 
 // these bindings copied from asprof.h
 // in sync with
-// https://github.com/async-profiler/async-profiler/blob/bd439d8a0421a821b0c17e5ca74e363103c9cf67/src/asprof.h
+// https://github.com/async-profiler/async-profiler/blob/v4.2.1/src/asprof.h
 
 #[allow(non_camel_case_types)]
 pub type asprof_error_t = *const std::ffi::c_char;

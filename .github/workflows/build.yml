@@ -38,12 +38,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         shell: bash
-        run: cargo build --all-features --verbose --example simple
-      - name: Upload artifact for testing
+        run: cargo build --all-features --verbose --example simple --example pollcatch-without-agent
+      - name: Upload example-simple for testing
         uses: actions/upload-artifact@v4
         with:
           name: example-simple
           path: ./target/debug/examples/simple
+      - name: Upload example-pollcatch-without-agent for testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: example-pollcatch-without-agent
+          path: ./target/debug/examples/pollcatch-without-agent
   build-decoder:
     name: Build Decoder
     runs-on: ubuntu-latest
@@ -86,6 +91,11 @@ jobs:
         with:
           name: example-simple
           path: ./tests
+      - name: Download example-pollcatch-without-agent
+        uses: actions/download-artifact@v4
+        with:
+          name: example-pollcatch-without-agent
+          path: ./tests
       - name: Download async-profiler
         shell: bash
         working-directory: tests
@@ -93,4 +103,5 @@ jobs:
       - name: Run integration test
         shell: bash
         working-directory: tests
-        run: chmod +x simple pollcatch-decoder && LD_LIBRARY_PATH=$PWD ./integration.sh && LD_LIBRARY_PATH=$PWD ./separate_runtime_integration.sh
+        # The `ls -l` is there to help debugging CI, I see no reason to remove it
+        run: ls -l && chmod +x simple pollcatch-without-agent pollcatch-decoder && LD_LIBRARY_PATH=$PWD ./integration.sh && LD_LIBRARY_PATH=$PWD ./separate_runtime_integration.sh && LD_LIBRARY_PATH=$PWD ./test_pollcatch_without_agent.sh
