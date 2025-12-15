@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.12](https://github.com/async-profiler/rust-agent/compare/v0.1.11...v0.1.12) - 2025-12-15
+
+### Breaking Changes
+
+- make __unstable-fargate-cpu-count always on ([#117](https://github.com/async-profiler/rust-agent/pull/117))
+
+### Docs
+
+- many documentation improvements ([#115](https://github.com/async-profiler/rust-agent/pull/115)) ([#116](https://github.com/async-profiler/rust-agent/pull/116))
+
+### Other
+
+- add log on unclean stops ([#115](https://github.com/async-profiler/rust-agent/pull/115))
+
 ## [0.1.11](https://github.com/async-profiler/rust-agent/compare/v0.1.10...v0.1.11) - 2025-11-16
 
 ### Added
