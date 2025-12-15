@@ -50,7 +50,7 @@ The S3 reporter uploads each report in a `zip` file, that currently contains 2 f
 2. metadata as `metadata.json`, in format `reporter::s3::MetadataJson`.
 
 The `zip` file is uploaded to the bucket under the path `profile_{profiling_group_name}_{machine}_{pid}_{time}.zip`,
-where `{machine}` is either `ec2_{ec2_instance_id}_`, `ecs_{cluster_arn}_{task_arn}`, or `onprem__`.
+where `{machine}` is either `ec2_{ec2_instance_id}_`, `ecs_{cluster_arn}_{task_arn}`, or `unknown__`.
 
 In addition to the S3 reporter, `async-profiler-agent` also includes `LocalReporter` that writes to a directory, and a `MultiReporter` that allows combining reporters. You can also write your own reporter (via the `Reporter` trait) to upload the profile results to your favorite profiler backend.
 
@@ -105,6 +105,46 @@ Memory samples are not enabled by default, but can be enabled by [`with_native_m
 [`ProfilerOptionsBuilder`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.ProfilerOptionsBuilder.html
 [`with_native_mem_bytes`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.ProfilerOptionsBuilder.html#method.with_native_mem_bytes
 
+### Non-standard runtime configurations
+
+The profiler always profiles an entire process. If a program has multiple Tokio (or non-Tokio, or non-Rust)
+runtimes, it will profile all of them mostly without problems.
+
+Even mixing native code and JVM in the same process works, no matter whether
+async-profiler is started from Rust or Java, though there are occasionally bugs
+there - if you are mixing native code and JVM and are encountering weird
+problems, you should [report an issue to async-profiler].
+
+Since async-profiler uses process-global resources such as signal handlers, a
+process can only have one active instance of async-profiler at a time. This
+applies across languages as well - if you have both native code and JVM code in
+your process, only one of them should be starting async-profiler.
+
+The most-often used [`Profiler::spawn`] and [`Profiler::spawn_controllable`] functions assume that they are run within
+a Tokio runtime. The S3 reporter performs AWS SDK calls within that runtime, and therefore it
+assumes that the runtime is appropriate for performing AWS SDK calls. Most Tokio applications should just
+spawn async-profiler within their (primary and only) Tokio runtime.
+
+Some services have especially strict (tens-of-microseconds or less) latency requirements, and therefore have
+a "data plane" (either non-Tokio or weirdly-configured Tokio) runtime, and in addition to that a
+normally-configured (or normally-configured but high-[niceness]) "control plane" runtime that
+is suitable for performing AWS SDK calls. In these cases, it makes sense to spawn the async-profiler agent
+within the "control plane" runtime.
+
+Other applications just don't use Tokio for their main code. These applications can use
+[`Profiler::spawn_thread`] and its variants to spawn async-profiler in a separate thread
+that will come with a Tokio runtime managed by `async-profiler-agent`.
+
+In all of these cases, the [pollcatch](#pollcatch) hooks should be enabled on the
+runtime where you *intend to be catching long polls on* - presumably your data-plane runtime. They do not
+introduce much overhead or unpredictable latency.
+
+[report an issue to async-profiler]: https://github.com/async-profiler/async-profiler/issues
+[`Profiler::spawn`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.Profiler.html#method.spawn
+[`Profiler::spawn_controllable`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.Profiler.html#method.spawn_controllable
+[`Profiler::spawn_thread`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.Profiler.html#method.spawn_thread
+[niceness]: https://linux.die.net/man/2/nice
+
 ### PollCatch
 
 If you want to find long poll times, and you have `RUSTFLAGS="--cfg tokio_unstable"`, you can
@@ -122,6 +162,33 @@ If you can't use `tokio_unstable`, it is possible to wrap your tasks by instrume
 `before_poll_hook` before user code runs and `after_poll_hook` after user code runs, but that
 runs the risk of forgetting to instrument the task that is actually causing the high latency,
 and therefore it is strongly recommended to use `on_before_task_poll`/`on_after_task_poll`.
+
+#### Using pollcatch without the agent
+
+The recommended way of using async-profiler-agent is via async-profiler-agent's agent. However, in case your
+application is already integrated with some other mechanism that calls `async-profiler`, the
+`on_before_task_poll`/`on_after_task_poll` hooks just call the async-profiler [JFR Event API]. They can be used
+even if async-profiler is run via a mechanism different from the async-profiler Rust agent (for example, a
+Java-native async-profiler integration), though currently, the results from the JFR Event API are only exposed in
+async-profiler's JFR-format output mode.
+
+You can see the `test_pollcatch_without_agent.sh` for an example that uses pollcatch with just async-profiler's
+`LD_PRELOAD` mode.
+
+However, in that case, it is only needed that the pollcatch hooks refer to the same `libasyncProfiler.so` that is
+being used as a profiler, since the JFR Event API is based on global variables that must match. async-profiler-agent
+uses [libloading] which uses [dlopen(3)] (currently passing [`RTLD_LOCAL | RTLD_LAZY`][libloadingflags]), which
+performs [deduplication based on inode]. Therefore, if your system only has a single `libasyncProfiler.so`
+on the search path, it will be shared and pollcatch will work.
+
+The async-profiler-agent crate currently does not expose the JFR Event API to users, due to stability
+reasons. As a user, using `libloading` to open `libasyncProfiler.so` and calling the API yourself
+will work, but if you have a use case for the JFR Event API, consider opening an issue.
+
+[deduplication based on inode]: https://stackoverflow.com/questions/45954861/how-to-circumvent-dlopen-caching/45955035#45955035
+[JFR Event API]: https://github.com/async-profiler/async-profiler/blob/master/src/asprof.h#L99
+[libloading]: https://crates.io/crates/libloading
+[libloadingflags]: https://docs.rs/libloading/latest/libloading/os/unix/struct.Library.html#method.new
 
 ### Not enabling the AWS SDK / Reqwest default features
 
