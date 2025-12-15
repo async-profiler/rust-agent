@@ -140,7 +140,6 @@ impl super::AgentMetadata {
             aws_account_id: imds_ec2_instance_metadata.account_id,
             aws_region_id: imds_ec2_instance_metadata.region,
             ec2_instance_id: imds_ec2_instance_metadata.instance_id,
-            #[cfg(feature = "__unstable-fargate-cpu-count")]
             ec2_instance_type: imds_ec2_instance_metadata.instance_type,
         }
     }
@@ -161,12 +160,10 @@ impl super::AgentMetadata {
                 .to_string(),
             ecs_task_arn: fargate_metadata.task_arn,
             ecs_cluster_arn: fargate_metadata.cluster,
-            #[cfg(feature = "__unstable-fargate-cpu-count")]
             cpu_limit: fargate_metadata
                 .limits
                 .as_ref()
                 .and_then(|limits| limits.cpu),
-            #[cfg(feature = "__unstable-fargate-cpu-count")]
             memory_limit: fargate_metadata
                 .limits
                 .as_ref()
@@ -397,9 +394,7 @@ mod tests {
                 aws_region_id: "us-east-1".to_owned(),
                 ecs_task_arn: "arn:aws:ecs:us-east-1:123456789012:task/profiler-metadata-cluster/5261e761e0e2a3d92da3f02c8e5bab1f".to_owned(),
                 ecs_cluster_arn: "arn:aws:ecs:us-east-1:123456789012:cluster/profiler-metadata-cluster".to_owned(),
-                #[cfg(feature = "__unstable-fargate-cpu-count")]
                 cpu_limit: _expected_cpu_limit,
-                #[cfg(feature = "__unstable-fargate-cpu-count")]
                 memory_limit: _expected_memory_limit,
             }
         )

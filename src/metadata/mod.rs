@@ -43,7 +43,7 @@ pub enum AgentMetadata {
     /// Metadata for an [EC2] instance running on AWS
     ///
     /// [EC2]: https://aws.amazon.com/ec2
-    #[cfg_attr(feature = "__unstable-fargate-cpu-count", non_exhaustive)]
+    #[non_exhaustive]
     Ec2AgentMetadata {
         /// The AWS account id
         aws_account_id: String,
@@ -51,14 +51,13 @@ pub enum AgentMetadata {
         aws_region_id: String,
         /// The EC2 instance id
         ec2_instance_id: String,
-        #[cfg(feature = "__unstable-fargate-cpu-count")]
         /// The EC2 instance type
         ec2_instance_type: String,
     },
     /// Metadata for a [Fargate] task running on AWS.
     ///
     /// [Fargate]: https://aws.amazon.com/fargate
-    #[cfg_attr(feature = "__unstable-fargate-cpu-count", non_exhaustive)]
+    #[non_exhaustive]
     FargateAgentMetadata {
         /// The AWS account id
         aws_account_id: String,
@@ -81,14 +80,12 @@ pub enum AgentMetadata {
         /// For example, `Some(0.25)`. This will be `None` if the CPU limit is not specified.
         ///
         /// See the ECS documentation for more details
-        #[cfg(feature = "__unstable-fargate-cpu-count")]
         cpu_limit: Option<OrderedF64>,
         /// The memory limit for the Fargate cluster (in megabytes)
         ///
         /// For example, `Some(2048)`. This will be `None` if the memory limit is not specified.
         ///
         /// See the ECS documentation for more details
-        #[cfg(feature = "__unstable-fargate-cpu-count")]
         memory_limit: Option<u64>,
     },
     /// Metadata for a host that is neither an EC2 nor a Fargate
@@ -204,7 +201,6 @@ impl Ec2AgentMetadataBuilder {
             aws_account_id: self.aws_account_id,
             aws_region_id: self.aws_region_id,
             ec2_instance_id: self.ec2_instance_id,
-            #[cfg(feature = "__unstable-fargate-cpu-count")]
             ec2_instance_type: self.ec2_instance_type.unwrap_or_default(),
         }
     }
@@ -241,9 +237,7 @@ impl FargateAgentMetadataBuilder {
             aws_region_id: self.aws_region_id,
             ecs_task_arn: self.ecs_task_arn,
             ecs_cluster_arn: self.ecs_cluster_arn,
-            #[cfg(feature = "__unstable-fargate-cpu-count")]
             cpu_limit: self.cpu_limit.map(Into::into),
-            #[cfg(feature = "__unstable-fargate-cpu-count")]
             memory_limit: self.memory_limit,
         }
     }

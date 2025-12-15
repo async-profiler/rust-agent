@@ -246,4 +246,4 @@ than the default one and not have the default backend linked in to their executa
 - `s3-no-defaults`: S3 reporter without default features (for custom TLS)
 - `aws-metadata`: AWS metadata detection with default features
 - `aws-metadata-no-defaults`: AWS metadata without default features
-- `__unstable-fargate-cpu-count`: Experimental Fargate CPU metrics
+- `__unstable-fargate-cpu-count`: Tombstone for experimental Fargate CPU metrics
