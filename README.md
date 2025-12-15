@@ -107,8 +107,18 @@ Memory samples are not enabled by default, but can be enabled by [`with_native_m
 
 ### Non-standard runtime configurations
 
-The profiler always profiles a process-at-once. If a program has multiple Tokio (or non-Tokio, or non-Rust)
-runtimes, it will profile all of them without problems.
+The profiler always profiles an entire process. If a program has multiple Tokio (or non-Tokio, or non-Rust)
+runtimes, it will profile all of them mostly without problems.
+
+Even mixing native code and JVM in the same process works, no matter whether
+async-profiler is started from Rust or Java, though there are occasionally bugs
+there - if you are mixing native code and JVM and are encountering weird
+problems, you should [report an issue to async-profiler].
+
+Since async-profiler uses process-global resources such as signal handlers, a
+process can only have one active instance of async-profiler at a time. This
+applies across languages as well - if you have both native code and JVM code in
+your process, only one of them should be starting async-profiler.
 
 The most-often used [`Profiler::spawn`] and [`Profiler::spawn_controllable`] functions assume that they are run within
 a Tokio runtime. The S3 reporter performs AWS SDK calls within that runtime, and therefore it
@@ -129,6 +139,7 @@ In all of these cases, the [pollcatch](#pollcatch) hooks should be enabled on th
 runtime where you *intend to be catching long polls on* - presumably your data-plane runtime. They do not
 introduce much overhead or unpredictable latency.
 
+[report an issue to async-profiler]: https://github.com/async-profiler/async-profiler/issues
 [`Profiler::spawn`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.Profiler.html#method.spawn
 [`Profiler::spawn_controllable`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.Profiler.html#method.spawn_controllable
 [`Profiler::spawn_thread`]: https://docs.rs/async-profiler-agent/0.1/async_profiler_agent/profiler/struct.Profiler.html#method.spawn_thread
