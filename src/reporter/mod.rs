@@ -45,6 +45,7 @@ pub trait Reporter: fmt::Debug {
     ///
     /// The default implementation does nothing. Reporters that can perform
     /// synchronous I/O (like [`local::LocalReporter`]) should override this.
+    #[doc(hidden)]
     fn report_blocking(
         &self,
         _jfr_path: &Path,
