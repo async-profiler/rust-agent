@@ -23,12 +23,19 @@ enum LocalReporterError {
 ///
 /// The files are reported with the filename `yyyy-mm-ddTHH-MM-SSZ.jfr`
 ///
+/// Unlike other reporters (e.g. S3), the local reporter will
+/// flush any pending JFR data on drop when the profiler task is cancelled
+/// (for example, during Tokio runtime shutdown). Other reporters require
+/// an explicit call to [`RunningProfiler::stop`] to ensure the last sample
+/// is uploaded.
+///
 /// It does not currently use the metadata, so if you are using
 /// [LocalReporter] alone, rather than inside a [MultiReporter], you
 /// can just use [AgentMetadata::NoMetadata] as metadata.
 ///
 /// [AgentMetadata::NoMetadata]: crate::metadata::AgentMetadata::NoMetadata
 /// [MultiReporter]: crate::reporter::multi::MultiReporter
+/// [`RunningProfiler::stop`]: crate::profiler::RunningProfiler::stop
 ///
 /// ### Example
 ///
@@ -138,7 +145,7 @@ mod test {
     }
 
     #[test]
-    fn test_local_reporter_reports_on_drop() {
+    fn test_local_reporter_report_blocking() {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("input.jfr");
         std::fs::write(&src, b"JFR-DROP").unwrap();

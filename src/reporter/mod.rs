@@ -53,7 +53,7 @@ pub trait Reporter: fmt::Debug {
     ) -> Result<(), Box<dyn std::error::Error + Send>> {
         tracing::info!(
             "reporter does not support synchronous reporting, last sample will be lost. \
-            Add a call to `RunningProfiler::stop` to wait for the upload to finish."
+            Call `RunningProfiler::stop().await` before shutdown to ensure all samples are uploaded."
         );
         Ok(())
     }

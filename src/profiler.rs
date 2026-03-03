@@ -591,8 +591,10 @@ pub(crate) trait ProfilerEngine: Send + Sync + 'static {
 }
 
 /// Holds the profiler task state and performs a final synchronous report
-/// via [`Reporter::report_blocking`] when the task is cancelled (e.g. Tokio
-/// runtime shutdown) before a graceful stop.
+/// when the task is cancelled (e.g. Tokio runtime shutdown) before a
+/// graceful stop. The local reporter will flush its contents on drop.
+/// For other reporters, you must call `RunningProfiler::stop().await`
+/// to ensure the last sample is uploaded.
 struct ProfilerTaskState<E: ProfilerEngine> {
     state: ProfilerState<E>,
     reporter: Box<dyn Reporter + Send + Sync>,
