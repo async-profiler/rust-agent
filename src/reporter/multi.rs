@@ -7,6 +7,7 @@ use crate::metadata::ReportMetadata;
 use super::Reporter;
 
 use std::fmt;
+use std::path::Path;
 
 /// An aggregated error that contains an error per reporter. A reporter is identified
 /// by the result of its Debug impl.
@@ -103,6 +104,28 @@ impl Reporter for MultiReporter {
         .await;
         // return all errors
         let errors: Vec<_> = errors.into_iter().flat_map(|e| e.err()).collect();
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(Box::new(MultiError { errors }))
+        }
+    }
+
+    fn report_blocking(
+        &self,
+        jfr_path: &Path,
+        metadata: &ReportMetadata,
+    ) -> Result<(), Box<dyn std::error::Error + Send>> {
+        let errors: Vec<_> = self
+            .reporters
+            .iter()
+            .filter_map(|reporter| {
+                reporter
+                    .report_blocking(jfr_path, metadata)
+                    .err()
+                    .map(|e| (format!("{reporter:?}"), e))
+            })
+            .collect();
         if errors.is_empty() {
             Ok(())
         } else {

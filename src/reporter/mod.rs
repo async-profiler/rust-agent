@@ -9,6 +9,7 @@
 //! 3. [multi::MultiReporter], which allows combining multiple reporters.
 
 use std::fmt;
+use std::path::Path;
 
 use async_trait::async_trait;
 
@@ -38,4 +39,22 @@ pub trait Reporter: fmt::Debug {
         jfr: Vec<u8>,
         metadata: &ReportMetadata,
     ) -> Result<(), Box<dyn std::error::Error + Send>>;
+
+    /// Synchronously report profiling data. Called during drop when the
+    /// async runtime is shutting down and async reporting is not possible.
+    ///
+    /// The default implementation does nothing. Reporters that can perform
+    /// synchronous I/O (like [`local::LocalReporter`]) should override this.
+    #[doc(hidden)]
+    fn report_blocking(
+        &self,
+        _jfr_path: &Path,
+        _metadata: &ReportMetadata,
+    ) -> Result<(), Box<dyn std::error::Error + Send>> {
+        tracing::info!(
+            "reporter does not support synchronous reporting, last sample will be lost. \
+            Call `RunningProfiler::stop().await` before shutdown to ensure all samples are uploaded."
+        );
+        Ok(())
+    }
 }
