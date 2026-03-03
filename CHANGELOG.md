@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.13](https://github.com/async-profiler/rust-agent/compare/v0.1.12...v0.1.13) - 2026-03-03
+
+### Added
+
+- unconditionally send off a final report on LocalReporter drop ([#125](https://github.com/async-profiler/rust-agent/pull/125))
+
+### Other
+
+- *(deps)* bump zip from 7.2.0 to 8.0.0
+- *(deps)* bump time from 0.3.45 to 0.3.47
+- *(deps)* bump bytes from 1.11.0 to 1.11.1
+- cargo update
+- *(deps)* bump zip from 6.0.0 to 7.0.0
+
 ## [0.1.12](https://github.com/async-profiler/rust-agent/compare/v0.1.11...v0.1.12) - 2025-12-15
 
 ### Breaking Changes
