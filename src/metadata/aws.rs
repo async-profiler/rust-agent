@@ -31,6 +31,9 @@ pub enum FargateMetadataToAgentMetadataError {
 /// An error getting IMDS metadata
 #[derive(Error, Debug)]
 #[error("profiler metadata error: {0}")]
+// The AWS-error-containing variants are fairly big, but boxing them is a
+// breaking API change and this is not a hot path
+#[allow(clippy::large_enum_variant)]
 pub enum AwsProfilerMetadataError {
     /// Internal IO error
     #[error("failed to create profiler metadata file: {0}")]

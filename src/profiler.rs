@@ -646,7 +646,7 @@ enum TickError {
     AsProf(#[from] AsProfError),
     #[error(transparent)]
     #[cfg(feature = "aws-metadata-no-defaults")]
-    Metadata(#[from] crate::metadata::aws::AwsProfilerMetadataError),
+    Metadata(Box<crate::metadata::aws::AwsProfilerMetadataError>),
     #[error("reporter: {0}")]
     Reporter(Box<dyn std::error::Error + Send>),
     #[error("broken clock: {0}")]
@@ -655,6 +655,13 @@ enum TickError {
     JfrRead(io::Error),
     #[error("empty inactive file error: {0}")]
     EmptyInactiveFile(io::Error),
+}
+
+#[cfg(feature = "aws-metadata-no-defaults")]
+impl From<crate::metadata::aws::AwsProfilerMetadataError> for TickError {
+    fn from(err: crate::metadata::aws::AwsProfilerMetadataError) -> Self {
+        TickError::Metadata(Box::new(err))
+    }
 }
 
 #[derive(Debug, Error)]
