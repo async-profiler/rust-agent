@@ -19,7 +19,7 @@ found_good=0
 for profile in $dir/*.jfr; do
     duration=$(./pollcatch-decoder duration "$profile")
     # Ignore "partial" profiles of less than 2s
-    if [[ $duration > 2 ]]; then
+    if ! (( $(echo "${duration}<2" | bc) )); then
         found_good=1
     else
         echo "Profile $profile is too short"

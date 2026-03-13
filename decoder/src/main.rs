@@ -565,7 +565,7 @@ fn poll_event_from_user_event(
         Some(PollEventKey {
             tid: thread_id as u32,
             clock_start: (start_time_ticks as u64).saturating_sub(duration),
-            duration: duration as u64,
+            duration,
         })
     } else {
         None
