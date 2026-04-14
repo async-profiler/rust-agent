@@ -3,13 +3,12 @@
 
 //! This module includes ways to get metadata attached to profiling reports.
 
-use ordered_float::OrderedFloat;
 pub use std::time::Duration;
 
 /// An ordered float. Individual type to avoid public API dependencies.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Copy, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(transparent)]
-pub struct OrderedF64(OrderedFloat<f64>);
+pub struct OrderedF64(f64);
 
 impl OrderedF64 {
     /// Create a new `OrderedF64`
@@ -19,19 +18,31 @@ impl OrderedF64 {
     /// let _v = OrderedF64::new(0.0);
     /// ```
     pub const fn new(value: f64) -> Self {
-        Self(OrderedFloat(value))
+        Self(value)
     }
 }
 
+impl PartialEq for OrderedF64 {
+    fn eq(&self, other: &Self) -> bool {
+        if self.0.is_nan() {
+            other.0.is_nan()
+        } else {
+            self.0 == other.0
+        }
+    }
+}
+
+impl Eq for OrderedF64 {}
+
 impl From<f64> for OrderedF64 {
     fn from(value: f64) -> Self {
-        Self(OrderedFloat(value))
+        Self(value)
     }
 }
 
 impl From<OrderedF64> for f64 {
     fn from(value: OrderedF64) -> Self {
-        value.0.0
+        value.0
     }
 }
 
