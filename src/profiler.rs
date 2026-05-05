@@ -562,7 +562,9 @@ impl<E: ProfilerEngine> Drop for ProfilerState<E> {
     fn drop(&mut self) {
         match self.status {
             Status::Running(_) => {
-                // In Drop, we can't use spawn_blocking, so we call the blocking operation directly
+                // In Drop, we can't use spawn_blocking, so we call the blocking operation
+                // directly. We skip the status reset that self.stop() would do since the
+                // struct is being dropped.
                 if let Err(err) = E::stop_async_profiler() {
                     // SECURITY: avoid removing the JFR file if stopping the profiler fails,
                     // to avoid symlink races
@@ -659,6 +661,8 @@ enum TickError {
     JfrRead(io::Error),
     #[error("empty inactive file error: {0}")]
     EmptyInactiveFile(io::Error),
+    #[error("jfr file missing (dropped during stop failure?)")]
+    JfrFileMissing,
     #[error("profiler state missing (previous tick panicked?)")]
     StateMissing,
     #[error("spawn_blocking task failed: {0}")]
@@ -1263,12 +1267,7 @@ fn tick_blocking<E: ProfilerEngine>(
     let jfr_file = match state.jfr_file.as_mut() {
         Some(f) => f,
         None => {
-            return (
-                state,
-                Err(TickError::EmptyInactiveFile(io::Error::other(
-                    "jfr file missing",
-                ))),
-            );
+            return (state, Err(TickError::JfrFileMissing));
         }
     };
 
