@@ -1290,6 +1290,11 @@ fn tick_blocking<E: ProfilerEngine>(
     )
 }
 
+/// # Cancel safety
+///
+/// This function is **not** cancel-safe. It moves `ProfilerState` out of `state_holder` via
+/// `.take()` before awaiting `spawn_blocking`. If the future is dropped (e.g. in a `select!`
+/// loop) before the state is restored, the profiler state is permanently lost.
 async fn profiler_tick<E: ProfilerEngine>(
     state_holder: &mut Option<ProfilerState<E>>,
     agent_metadata: &mut Option<AgentMetadata>,
