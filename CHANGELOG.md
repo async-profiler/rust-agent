@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.14](https://github.com/async-profiler/rust-agent/compare/v0.1.13...v0.1.14) - 2026-05-27
+
+### Fixed
+
+- Move profiler tick's blocking operations (start/stop/file swap) into `spawn_blocking`, preventing them from blocking the Tokio runtime ([#132](https://github.com/async-profiler/rust-agent/pull/132))
+
+### Other
+
+- Remove `ordered-float` dependency (replaced with a minimal inline implementation), eliminating transitive `rand 0.8` dependency ([#130](https://github.com/async-profiler/rust-agent/pull/130))
+- cargo update to address RUSTSEC-2026-0049 ([#129](https://github.com/async-profiler/rust-agent/pull/129))
+- Fix numeric comparison in tests, fix clippy warnings ([#128](https://github.com/async-profiler/rust-agent/pull/128), [#127](https://github.com/async-profiler/rust-agent/pull/127))
+
 ## [0.1.13](https://github.com/async-profiler/rust-agent/compare/v0.1.12...v0.1.13) - 2026-03-03
 
 ### Added

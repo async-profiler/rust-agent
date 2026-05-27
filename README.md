@@ -5,6 +5,9 @@
 [![Apache-2.0 licensed](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](./LICENSE)
 [![CI](https://github.com/async-profiler/rust-agent/actions/workflows/build.yml/badge.svg)](https://github.com/async-profiler/rust-agent/actions?query=workflow%3Abuild)
 
+> [!TIP]
+> Consider using [dial9-rs/dial9](https://github.com/dial9-rs/dial9) instead of async-profiler/rust-agent for a pure-Rust profiler that can also capture Tokio events, application events, and task dumps.
+
 An in-process Rust agent for profiling an application using [async-profiler] and uploading the resulting profiles.
 
 [async-profiler]: https://github.com/async-profiler/async-profiler
