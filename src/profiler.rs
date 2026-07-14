@@ -25,8 +25,8 @@ impl JfrFile {
     #[cfg(target_os = "linux")]
     fn new() -> Result<Self, io::Error> {
         Ok(Self {
-            active: tempfile::tempfile()?,
-            inactive: tempfile::tempfile()?,
+            active: tempfile::tempfile().unwrap(),
+            inactive: tempfile::tempfile().unwrap(),
         })
     }
 
@@ -73,7 +73,7 @@ impl JfrFile {
 /// Options for configuring the async-profiler behavior.
 /// Currently supports:
 /// - Native memory allocation tracking
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct ProfilerOptions {
     /// If set, the profiler will collect information about
@@ -531,12 +531,12 @@ impl<E: ProfilerEngine> ProfilerState<E> {
         })
     }
 
-    fn start(&mut self) -> Result<(), AsProfError> {
-        let jfr_file = self
-            .jfr_file
-            .as_ref()
-            .ok_or_else(|| io::Error::other("jfr file missing (dropped during stop failure?)"))?;
-        let active = jfr_file.active_path();
+    fn jfr_file_mut(&mut self) -> &mut JfrFile {
+        self.jfr_file.as_mut().unwrap()
+    }
+
+    async fn start(&mut self) -> Result<(), AsProfError> {
+        let active = self.jfr_file.as_ref().unwrap().active_path();
         // drop guard - make sure the files are leaked if the profiler might have started
         self.status = Status::Starting;
         E::start_async_profiler(&self.asprof, &active, &self.profiler_options)?;
@@ -562,10 +562,7 @@ impl<E: ProfilerEngine> Drop for ProfilerState<E> {
     fn drop(&mut self) {
         match self.status {
             Status::Running(_) => {
-                // In Drop, we can't use spawn_blocking, so we call the blocking operation
-                // directly. We skip the status reset that self.stop() would do since the
-                // struct is being dropped.
-                if let Err(err) = E::stop_async_profiler() {
+                if let Err(err) = self.stop() {
                     // SECURITY: avoid removing the JFR file if stopping the profiler fails,
                     // to avoid symlink races
                     std::mem::forget(self.jfr_file.take());
@@ -599,8 +596,7 @@ pub(crate) trait ProfilerEngine: Send + Sync + 'static {
 /// For other reporters, you must call `RunningProfiler::stop().await`
 /// to ensure the last sample is uploaded.
 struct ProfilerTaskState<E: ProfilerEngine> {
-    // Option so profiler_tick can .take() the state to move it into spawn_blocking
-    state: Option<ProfilerState<E>>,
+    state: ProfilerState<E>,
     reporter: Box<dyn Reporter + Send + Sync>,
     agent_metadata: Option<AgentMetadata>,
     reporting_interval: Duration,
@@ -609,9 +605,8 @@ struct ProfilerTaskState<E: ProfilerEngine> {
 
 impl<E: ProfilerEngine> ProfilerTaskState<E> {
     fn try_final_report(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let state = self.state.as_mut().ok_or("profiler state missing")?;
-        let start = state.stop()?.ok_or("profiler was not running")?;
-        let jfr_file = state.jfr_file.as_ref().ok_or("jfr file missing")?;
+        let start = self.state.stop()?.ok_or("profiler was not running")?;
+        let jfr_file = self.state.jfr_file.as_ref().ok_or("jfr file missing")?;
         let jfr_path = jfr_file.active_path();
         if jfr_path.metadata()?.len() == 0 {
             return Ok(());
@@ -634,8 +629,7 @@ impl<E: ProfilerEngine> ProfilerTaskState<E> {
 
 impl<E: ProfilerEngine> Drop for ProfilerTaskState<E> {
     fn drop(&mut self) {
-        let is_started = self.state.as_ref().is_some_and(|s| s.is_started());
-        if self.completed_normally || !is_started {
+        if self.completed_normally || !self.state.is_started() {
             return;
         }
         tracing::info!("profiler task cancelled, attempting final report on drop");
@@ -661,12 +655,6 @@ enum TickError {
     JfrRead(io::Error),
     #[error("empty inactive file error: {0}")]
     EmptyInactiveFile(io::Error),
-    #[error("jfr file missing (dropped during stop failure?)")]
-    JfrFileMissing,
-    #[error("profiler state missing (previous tick panicked?)")]
-    StateMissing,
-    #[error("spawn_blocking task failed: {0}")]
-    SpawnBlocking(tokio::task::JoinError),
 }
 
 #[cfg(feature = "aws-metadata-no-defaults")]
@@ -1178,7 +1166,7 @@ impl Profiler {
             };
 
             let mut task = ProfilerTaskState {
-                state: Some(state),
+                state,
                 reporter: self.reporter,
                 agent_metadata: self.agent_metadata,
                 reporting_interval: self.reporting_interval,
@@ -1207,7 +1195,7 @@ impl Profiler {
                 if let Err(err) = profiler_tick(
                     &mut task.state,
                     &mut task.agent_metadata,
-                    task.reporter.as_ref(),
+                    &*task.reporter,
                     task.reporting_interval,
                 )
                 .await
@@ -1236,108 +1224,53 @@ impl Profiler {
     }
 }
 
-/// Information from a successful profiler stop-start cycle, used by the async
-/// reporting phase that follows.
-struct TickCycleInfo {
-    start_time: SystemTime,
-    inactive_path: PathBuf,
-}
-
-/// The synchronous (blocking) portion of a profiler tick.
-///
-/// Takes owned [`ProfilerState`] and always returns it alongside the result,
-/// so the caller can restore it regardless of success or failure.
-fn tick_blocking<E: ProfilerEngine>(
-    mut state: ProfilerState<E>,
-) -> (ProfilerState<E>, Result<Option<TickCycleInfo>, TickError>) {
-    if !state.is_started() {
-        let result = state.start().map(|()| None).map_err(TickError::from);
-        return (state, result);
-    }
-
-    let start_time = match state.stop() {
-        Err(e) => return (state, Err(e.into())),
-        Ok(None) => {
-            tracing::warn!("stopped the profiler but it wasn't running?");
-            return (state, Ok(None));
-        }
-        Ok(Some(t)) => t,
-    };
-
-    let jfr_file = match state.jfr_file.as_mut() {
-        Some(f) => f,
-        None => {
-            return (state, Err(TickError::JfrFileMissing));
-        }
-    };
-
-    if let Err(e) = jfr_file.empty_inactive_file() {
-        return (state, Err(TickError::EmptyInactiveFile(e)));
-    }
-    jfr_file.swap();
-    let inactive_path = jfr_file.inactive_path();
-
-    if let Err(e) = state.start() {
-        return (state, Err(e.into()));
-    }
-
-    (
-        state,
-        Ok(Some(TickCycleInfo {
-            start_time,
-            inactive_path,
-        })),
-    )
-}
-
-/// # Cancel safety
-///
-/// This function is **not** cancel-safe. It moves `ProfilerState` out of `state_holder` via
-/// `.take()` before awaiting `spawn_blocking`. If the future is dropped (e.g. in a `select!`
-/// loop) before the state is restored, the profiler state is permanently lost.
 async fn profiler_tick<E: ProfilerEngine>(
-    state_holder: &mut Option<ProfilerState<E>>,
+    state: &mut ProfilerState<E>,
     agent_metadata: &mut Option<AgentMetadata>,
     reporter: &(dyn Reporter + Send + Sync),
     reporting_interval: Duration,
 ) -> Result<(), TickError> {
-    let state = state_holder.take().ok_or(TickError::StateMissing)?;
+    if !state.is_started() {
+        state.start().await?;
+        return Ok(());
+    }
 
-    let (state, result) = tokio::task::spawn_blocking(move || tick_blocking(state))
-        .await
-        .map_err(TickError::SpawnBlocking)?;
-    *state_holder = Some(state);
-
-    let Some(info) = result? else {
+    let Some(start) = state.stop()? else {
+        tracing::warn!("stopped the profiler but it wasn't running?");
         return Ok(());
     };
-
-    let start = info.start_time.duration_since(UNIX_EPOCH)?;
+    let start = start.duration_since(UNIX_EPOCH)?;
     let end = SystemTime::now().duration_since(UNIX_EPOCH)?;
+
+    // Start it up immediately, writing to the "other" file, so that we keep
+    // profiling the application while we're reporting data.
+    state
+        .jfr_file_mut()
+        .empty_inactive_file()
+        .map_err(TickError::EmptyInactiveFile)?;
+    state.jfr_file_mut().swap();
+    state.start().await?;
 
     // Lazily load the agent metadata if it was not provided in
     // the constructor. See the struct comments for why this is.
     // This code runs at most once.
-    let instance = match agent_metadata.as_ref() {
-        Some(md) => md,
-        None => {
-            #[cfg(feature = "aws-metadata-no-defaults")]
-            let md = crate::metadata::aws::load_agent_metadata().await?;
-            #[cfg(not(feature = "aws-metadata-no-defaults"))]
-            let md = crate::metadata::AgentMetadata::NoMetadata;
-            tracing::debug!("loaded metadata");
-            agent_metadata.insert(md)
-        }
-    };
+    if agent_metadata.is_none() {
+        #[cfg(feature = "aws-metadata-no-defaults")]
+        let md = crate::metadata::aws::load_agent_metadata().await?;
+        #[cfg(not(feature = "aws-metadata-no-defaults"))]
+        let md = crate::metadata::AgentMetadata::NoMetadata;
+        tracing::debug!("loaded metadata");
+        agent_metadata.replace(md);
+    }
 
     let report_metadata = ReportMetadata {
-        instance,
+        instance: agent_metadata.as_ref().unwrap(),
         start,
         end,
         reporting_interval,
     };
 
-    let jfr = tokio::fs::read(&info.inactive_path)
+    let jfr = tokio::fs::read(state.jfr_file_mut().inactive_path())
         .await
         .map_err(TickError::JfrRead)?;
 
