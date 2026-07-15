@@ -152,7 +152,6 @@ fn make_s3_file_name(
             aws_account_id: _,
             aws_region_id: _,
             ecs_task_arn,
-            ecs_cluster_arn: _,
             ..
         } => {
             let task_arn = ecs_task_arn.replace("/", "-").replace("_", "-");
