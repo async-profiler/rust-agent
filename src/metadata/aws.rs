@@ -76,6 +76,8 @@ struct ImdsEc2InstanceMetadata {
     instance_id: String,
 }
 
+// AwsProfilerMetadataError intentionally keeps its public variants unboxed.
+#[allow(clippy::result_large_err)]
 async fn read_ec2_metadata() -> Result<ImdsEc2InstanceMetadata, AwsProfilerMetadataError> {
     let imds = aws_config::imds::Client::builder().build();
     let imds_document = imds
@@ -106,6 +108,7 @@ struct FargateMetadata {
     limits: Option<FargateLimits>,
 }
 
+#[allow(clippy::result_large_err)]
 async fn read_fargate_metadata(
     http_client: &reqwest::Client,
 ) -> Result<FargateMetadata, AwsProfilerMetadataError> {
@@ -182,6 +185,7 @@ impl super::AgentMetadata {
 /// [Fargate]: https://aws.amazon.com/fargate
 /// [IMDS]: https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-instance-metadata.html
 /// [EC2]: https://aws.amazon.com/ec2
+#[allow(clippy::result_large_err)]
 pub async fn load_agent_metadata() -> Result<AgentMetadata, AwsProfilerMetadataError> {
     let agent_metadata: AgentMetadata = match read_ec2_metadata().await {
         Ok(imds_ec2_instance_metadata) => {

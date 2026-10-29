@@ -1,6 +1,5 @@
 use std::{
     ffi::OsString,
-    fs::File,
     io::{self, Cursor, Write},
 };
 
@@ -71,12 +70,13 @@ struct PollEventKey {
     duration: u64,
 }
 
-fn extract_async_profiler_jfr_from_zip(file: File) -> anyhow::Result<Option<Vec<u8>>> {
+fn extract_async_profiler_jfr_from_zip<R: Read + Seek>(file: R) -> anyhow::Result<Option<Vec<u8>>> {
     let mut zip = zip::ZipArchive::new(file)?;
+    zip.validate_header_consistency()?;
 
     for i in 0..zip.len() {
         let mut file = zip.by_index(i)?;
-        if file.name() == "async_profiler_dump_0.jfr" {
+        if file.name()? == "async_profiler_dump_0.jfr" {
             let mut buf = vec![];
             std::io::copy(&mut file, &mut buf)?;
             return Ok(Some(buf));
@@ -813,12 +813,48 @@ fn print_native_mem_events<F: Write>(
 #[cfg(test)]
 mod test {
     use super::{
-        NativeMemEvent, Sample, StackFrame, jfr_native_mem_events, jfr_samples,
-        print_native_mem_events, print_samples,
+        NativeMemEvent, Sample, StackFrame, extract_async_profiler_jfr_from_zip,
+        jfr_native_mem_events, jfr_samples, print_native_mem_events, print_samples,
     };
-    use std::io;
+    use std::io::{self, Write};
     use std::time::Duration;
     use test_case::test_case;
+
+    fn zip_with_jfr(filename: &str) -> Vec<u8> {
+        let mut zip = zip::ZipWriter::new(io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
+        zip.start_file(filename, options).unwrap();
+        zip.write_all(include_bytes!("../../tests/test.jfr"))
+            .unwrap();
+        zip.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn test_extract_jfr_from_zip() {
+        let zip = zip_with_jfr("async_profiler_dump_0.jfr");
+        let jfr = extract_async_profiler_jfr_from_zip(io::Cursor::new(zip))
+            .unwrap()
+            .unwrap();
+        assert_eq!(jfr, include_bytes!("../../tests/test.jfr"));
+    }
+
+    #[test]
+    fn test_extract_jfr_rejects_inconsistent_headers() {
+        let mut zip = zip_with_jfr("xsync_profiler_dump_0.jfr");
+        let central_header = zip
+            .windows(4)
+            .position(|bytes| bytes == b"PK\x01\x02")
+            .unwrap();
+        // Advertise the expected JFR name in the central directory while leaving
+        // a different name in the local header.
+        zip[central_header + 46] = b'a';
+        let error = extract_async_profiler_jfr_from_zip(io::Cursor::new(zip)).unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<zip::result::ZipError>(),
+            Some(zip::result::ZipError::InvalidArchive(_))
+        ));
+    }
 
     #[test]
     fn test_print_samples() {
