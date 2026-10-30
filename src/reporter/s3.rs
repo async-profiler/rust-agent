@@ -257,8 +257,9 @@ mod test {
     };
 
     fn assert_zip(zip_file: Vec<u8>) {
-        let zip = zip::ZipArchive::new(io::Cursor::new(&zip_file)).unwrap();
-        let mut file_names: Vec<_> = zip.file_names().collect();
+        let mut zip = zip::ZipArchive::new(io::Cursor::new(&zip_file)).unwrap();
+        zip.validate_header_consistency().unwrap();
+        let mut file_names: Vec<_> = zip.file_names().collect::<Result<_, _>>().unwrap();
         file_names.sort();
         assert_eq!(
             file_names,

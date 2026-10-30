@@ -34,6 +34,8 @@ pub trait Reporter: fmt::Debug {
     /// not make any such attempts).
     ///
     /// [`Profiler`]: crate::profiler::Profiler
+    // async_trait adds #[must_use] even though the returned Future is already must_use.
+    #[allow(clippy::double_must_use)]
     async fn report(
         &self,
         jfr: Vec<u8>,
