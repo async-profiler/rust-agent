@@ -32,15 +32,20 @@ def main():
     for ek,ev in build['env'].items():
         os.environ[ek] = str(ev)
 
+    # CI installs current toolchains; refresh ours before checking the same lints.
+    for toolchain in ('stable', 'nightly'):
+        runcmd(['rustup', 'toolchain', 'install', toolchain, '--profile', 'minimal',
+                '--component', 'clippy', '--component', 'rustfmt', '--no-self-update'])
+
     # Decoder
     runcmd(['cargo', f'+nightly', 'fmt', '--all'], cwd='./decoder')
-    runcmd(['cargo', f'+nightly', 'clippy', '--workspace', '--all-features', '--', '-D', 'warnings'], cwd='./decoder')
+    runcmd(['cargo', '+stable', 'clippy', '--workspace', '--all-features', '--', '-D', 'warnings'], cwd='./decoder')
     runcmd(['cargo', '+nightly', 'test'], cwd='./decoder')
     runcmd(['cargo', '+nightly', 'build'], cwd='./decoder')
 
     # Main
     runcmd(['cargo', f'+nightly', 'fmt', '--all'])
-    runcmd(['cargo', f'+nightly', 'clippy', '--workspace', '--all-features', '--', '-D', 'warnings'])
+    runcmd(['cargo', '+stable', 'clippy', '--workspace', '--all-features', '--', '-D', 'warnings'])
     for toolchain in build['strategy']['matrix']['toolchain']:
         for flags in build['strategy']['matrix']['flags']:
             runcmd(['cargo', f'+{toolchain}', 'build', '--verbose'] + shlex.split(flags))
