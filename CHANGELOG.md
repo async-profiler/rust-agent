@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## [unreleased]
 
+## [0.1.15](https://github.com/async-profiler/rust-agent/compare/v0.1.14...v0.1.15) - 2026-10-30
+
+### Fixed
+
+- Require `zip 9.0.5+` to address CVE-2026-115905, and validate ZIP header consistency before decoding JFR archives ([#138](https://github.com/async-profiler/rust-agent/pull/138))
+- Revert moving profiler tick's blocking operations into `spawn_blocking`, restoring the behavior before 0.1.14 ([#135](https://github.com/async-profiler/rust-agent/pull/135))
+- Handle async-trait's must-use lint on current stable ([#138](https://github.com/async-profiler/rust-agent/pull/138))
+
+### Other
+
+- *(deps)* Bump quinn-proto from 0.11.14 to 0.11.16 ([#136](https://github.com/async-profiler/rust-agent/pull/136))
+
 ## [0.1.14](https://github.com/async-profiler/rust-agent/compare/v0.1.13...v0.1.14) - 2026-05-27
 
 ### Fixed
